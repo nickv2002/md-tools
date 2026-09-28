@@ -111,15 +111,18 @@ echo "==> update Homebrew cask"
 "$root/scripts/render-cask.sh" "$version" "$mac_sha" "$amd_sha" "$arm_sha"
 brew style "$root/Casks/md-tools.rb"
 ruby -c "$root/Casks/md-tools.rb"
-git add Casks/md-tools.rb
-git -c commit.gpgsign=false commit -m "Update Homebrew cask for $tag"
+echo "==> generate changelog and release notes"
+prev_tag=$(git describe --tags --abbrev=0)
+"$root/scripts/changelog.sh" "$tag" "$prev_tag" HEAD "$dist/release-notes.md"
+printf '\nSigned and notarized macOS ARM64 and self-contained Linux AMD64/ARM64 CLI ZIPs.\n' >> "$dist/release-notes.md"
+git add Casks/md-tools.rb CHANGELOG.md
+git -c commit.gpgsign=false commit -m "Update Homebrew cask and changelog for $tag"
 
 echo "==> tag and create draft release"
 git tag "$tag"
 git push origin main "$tag"
 gh release create "$tag" "$dist"/md-tools-*.zip "$dist/checksums.txt" \
-  "$dist/notarization-log.json" --draft --title "$tag" \
-  --notes "Signed and notarized macOS ARM64 and self-contained Linux AMD64/ARM64 CLI ZIPs."
+  "$dist/notarization-log.json" --draft --title "$tag" --notes-file "$dist/release-notes.md"
 
 echo "==> publish release"
 gh release edit "$tag" --draft=false
