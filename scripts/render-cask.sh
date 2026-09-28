@@ -32,7 +32,7 @@ cask "md-tools" do
 
     url "https://github.com/nickv2002/md-tools/releases/download/v#{version}/md-tools-darwin-arm64-v#{version}.zip"
 
-    depends_on arch: :arm
+    depends_on arch: :arm64
   end
   on_linux do
     on_arm do

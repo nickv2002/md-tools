@@ -9,11 +9,13 @@ On macOS ARM64 or Linux AMD64/ARM64, install both commands with Homebrew:
 
 ```bash
 brew tap nickv2002/md-tools https://github.com/nickv2002/md-tools
+brew trust --cask nickv2002/md-tools/md-tools
 brew install --cask md-tools
 ```
 
 The explicit URL is required because this repository is named `md-tools`, not
-`homebrew-md-tools`. Alternatively, download the ZIP for your architecture from
+`homebrew-md-tools`. The trust command grants access to this cask only, not the
+whole tap. Alternatively, download the ZIP for your architecture from
 [Releases](https://github.com/nickv2002/md-tools/releases), verify its SHA-256
 against `checksums.txt`, extract it, and put both executables on your `PATH`.
 
