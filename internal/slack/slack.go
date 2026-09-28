@@ -2,6 +2,8 @@ package slack
 
 import (
 	"fmt"
+	"html"
+	"regexp"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -41,18 +43,91 @@ func escape(s string) string {
 	return strings.ReplaceAll(s, ">", "&gt;")
 }
 
-func childrenInline(node ast.Node, source []byte) string {
+// zeroWidthSpace placed before a literal markup character stops Slack from
+// treating it as an emphasis delimiter.
+const zeroWidthSpace = "\u200b"
+
+var entityRef = regexp.MustCompile(`^&(?:#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});`)
+
+func isASCIIPunct(c byte) bool {
+	return strings.IndexByte("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", c) >= 0
+}
+
+// unescapeText resolves Markdown backslash escapes and HTML entities in a
+// raw text segment. With neutralize, an escaped *, _, ~ or ` keeps Slack from
+// reading it as markup, since mrkdwn has no backslash escape.
+func unescapeText(s string, neutralize bool) string {
+	if !strings.ContainsAny(s, "\\&") {
+		return s
+	}
 	var b strings.Builder
-	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
-		b.WriteString(renderInline(child, source))
+	for i := 0; i < len(s); {
+		switch c := s[i]; {
+		case c == '\\' && i+1 < len(s) && isASCIIPunct(s[i+1]):
+			if neutralize && s[i+1] == '*' {
+				// A zero-width space does not stop Slack bolding *x*; the
+				// asterisk operator looks the same and is inert.
+				b.WriteString("∗")
+				i += 2
+				continue
+			}
+			if neutralize && s[i+1] == '`' {
+				b.WriteString("ˋ") // same stand-in used for backticks inside code spans
+				i += 2
+				continue
+			}
+			if neutralize && strings.IndexByte("_~", s[i+1]) >= 0 {
+				b.WriteString(zeroWidthSpace)
+			}
+			b.WriteByte(s[i+1])
+			i += 2
+			continue
+		case c == '&':
+			if m := entityRef.FindString(s[i:]); m != "" {
+				if u := html.UnescapeString(m); u != m {
+					b.WriteString(u)
+					i += len(m)
+					continue
+				}
+			}
+		}
+		b.WriteByte(s[i])
+		i++
 	}
 	return b.String()
 }
 
-func renderInline(node ast.Node, source []byte) string {
+// slackURL escapes a link target. Slack splits <url|label> on the first pipe
+// and ends the link at whitespace, so both are percent-encoded.
+func slackURL(u string) string {
+	u = strings.ReplaceAll(u, "|", "%7C")
+	u = strings.ReplaceAll(u, " ", "%20")
+	return escape(u)
+}
+
+// fenceSafe keeps ``` inside code content from closing the Slack code block.
+func fenceSafe(s string) string {
+	return strings.ReplaceAll(s, "```", "``"+zeroWidthSpace+"`")
+}
+
+// inlineCtx tracks enclosing markup while rendering inline nodes.
+type inlineCtx struct {
+	bold bool // inside a heading, already rendered bold
+	link bool // inside a link label, where nested links cannot exist
+}
+
+func childrenInline(node ast.Node, source []byte, c inlineCtx) string {
+	var b strings.Builder
+	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+		b.WriteString(renderInline(child, source, c))
+	}
+	return b.String()
+}
+
+func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 	switch n := node.(type) {
 	case *ast.Text:
-		s := escape(string(n.Segment.Value(source)))
+		s := escape(unescapeText(string(n.Segment.Value(source)), true))
 		if n.HardLineBreak() {
 			return s + "\n"
 		}
@@ -63,39 +138,67 @@ func renderInline(node ast.Node, source []byte) string {
 	case *ast.String:
 		return escape(string(n.Value))
 	case *ast.Emphasis:
+		if c.link { // Slack shows emphasis markers literally inside a link label
+			return childrenInline(n, source, c)
+		}
 		mark := "_"
 		if n.Level >= 2 {
+			if c.bold {
+				return childrenInline(n, source, c)
+			}
 			mark = "*"
 		}
-		return mark + childrenInline(n, source) + mark
+		return mark + childrenInline(n, source, c) + mark
 	case *extast.Strikethrough:
-		return "~" + childrenInline(n, source) + "~"
+		if c.link {
+			return childrenInline(n, source, c)
+		}
+		return "~" + childrenInline(n, source, c) + "~"
 	case *ast.CodeSpan:
-		return "`" + strings.ReplaceAll(childrenInline(n, source), "`", "ˋ") + "`"
+		var b strings.Builder
+		for child := n.FirstChild(); child != nil; child = child.NextSibling() {
+			if t, ok := child.(*ast.Text); ok {
+				b.WriteString(escape(string(t.Segment.Value(source))))
+				if t.SoftLineBreak() || t.HardLineBreak() {
+					b.WriteByte(' ')
+				}
+			}
+		}
+		if c.link {
+			return b.String() // Slack does not render code inside a link label
+		}
+		return "`" + strings.ReplaceAll(b.String(), "`", "ˋ") + "`"
 	case *ast.Link:
-		label := strings.TrimSpace(childrenInline(n, source))
-		url := escape(string(n.Destination))
+		c.link = true
+		label := strings.TrimSpace(childrenInline(n, source, c))
+		url := slackURL(string(n.Destination))
 		if label == "" || label == url {
 			return "<" + url + ">"
 		}
 		return "<" + url + "|" + label + ">"
 	case *ast.AutoLink:
-		return "<" + escape(string(n.URL(source))) + ">"
+		return "<" + slackURL(string(n.URL(source))) + ">"
 	case *ast.Image:
-		label := strings.TrimSpace(childrenInline(n, source))
+		label := strings.TrimSpace(childrenInline(n, source, c))
 		if label == "" {
 			label = "image"
 		}
-		return "<" + escape(string(n.Destination)) + "|" + label + ">"
+		if c.link {
+			return label // a link label cannot hold another link
+		}
+		return "<" + slackURL(string(n.Destination)) + "|" + label + ">"
 	case *extast.TaskCheckBox:
 		if n.IsChecked {
-			return "[x] "
+			return "☑ "
 		}
-		return "[ ] "
+		return "☐ "
 	case *ast.RawHTML:
+		if strings.HasPrefix(strings.ToLower(string(n.Segments.Value(source))), "<br") {
+			return "\n"
+		}
 		return ""
 	default:
-		return childrenInline(node, source)
+		return childrenInline(node, source, c)
 	}
 }
 
@@ -115,29 +218,51 @@ func codeLines(node ast.Node, source []byte) string {
 		segment := node.Lines().At(i)
 		b.Write(segment.Value(source))
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return fenceSafe(escape(strings.TrimRight(b.String(), "\n")))
+}
+
+func isParagraph(n ast.Node) bool {
+	_, ok := n.(*ast.Paragraph)
+	return ok
 }
 
 func renderList(n *ast.List, source []byte, depth int) string {
 	var lines []string
 	ordinal := n.Start
 	for item := n.FirstChild(); item != nil; item = item.NextSibling() {
-		var parts []string
+		var body strings.Builder
 		for child := item.FirstChild(); child != nil; child = child.NextSibling() {
-			if _, ok := child.(*ast.List); ok {
-				if nested := renderBlock(child, source, depth+1); nested != "" {
-					parts = append(parts, "\n"+nested)
-				}
-			} else if part := strings.TrimSpace(renderBlock(child, source, depth+1)); part != "" {
-				parts = append(parts, part)
+			var part string
+			switch child.(type) {
+			case *ast.List:
+				part = "\n" + renderBlock(child, source, depth+1)
+			case *ast.FencedCodeBlock, *ast.CodeBlock, *extast.Table:
+				// A fence only renders when it starts its own line.
+				part = "\n" + renderBlock(child, source, depth+1)
+			default:
+				part = strings.TrimSpace(renderBlock(child, source, depth+1))
 			}
+			if strings.TrimSpace(part) == "" {
+				continue
+			}
+			switch {
+			case strings.HasPrefix(part, "\n"):
+			case body.Len() == 0:
+			case strings.HasSuffix(body.String(), "```"):
+				body.WriteByte('\n')
+			case isParagraph(child):
+				body.WriteByte('\n') // keep a second paragraph in an item on its own line
+			default:
+				body.WriteByte(' ')
+			}
+			body.WriteString(part)
 		}
 		marker := "-"
 		if n.IsOrdered() {
 			marker = fmt.Sprintf("%d.", ordinal)
 			ordinal++
 		}
-		lines = append(lines, strings.Repeat("  ", depth)+marker+" "+strings.Join(parts, " "))
+		lines = append(lines, strings.Repeat("  ", depth)+marker+" "+body.String())
 	}
 	return strings.Join(lines, "\n")
 }
@@ -149,12 +274,18 @@ func plainText(node ast.Node, source []byte) string {
 	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
 		switch n := child.(type) {
 		case *ast.Text:
-			b.Write(n.Segment.Value(source))
+			b.WriteString(unescapeText(string(n.Segment.Value(source)), false))
 			if n.HardLineBreak() || n.SoftLineBreak() {
 				b.WriteByte(' ')
 			}
 		case *ast.String:
 			b.Write(n.Value)
+		case *ast.CodeSpan:
+			for cc := n.FirstChild(); cc != nil; cc = cc.NextSibling() {
+				if t, ok := cc.(*ast.Text); ok {
+					b.Write(t.Segment.Value(source))
+				}
+			}
 		case *ast.Link:
 			label := strings.TrimSpace(plainText(n, source))
 			url := string(n.Destination)
@@ -281,15 +412,15 @@ func renderTable(n *extast.Table, source []byte) string {
 			out = append(out, strings.Join(rule, "-+-"))
 		}
 	}
-	return "```\n" + strings.Join(out, "\n") + "\n```"
+	return "```\n" + fenceSafe(strings.Join(out, "\n")) + "\n```"
 }
 
 func renderBlock(node ast.Node, source []byte, depth int) string {
 	switch n := node.(type) {
 	case *ast.Paragraph, *ast.TextBlock:
-		return childrenInline(node, source)
+		return childrenInline(node, source, inlineCtx{})
 	case *ast.Heading:
-		return "*" + strings.TrimSpace(childrenInline(n, source)) + "*"
+		return "*" + strings.TrimSpace(childrenInline(n, source, inlineCtx{bold: true})) + "*"
 	case *ast.List:
 		return renderList(n, source, depth)
 	case *ast.Blockquote:
@@ -297,7 +428,11 @@ func renderBlock(node ast.Node, source []byte, depth int) string {
 		if body == "" {
 			return ""
 		}
-		return "> " + strings.ReplaceAll(body, "\n", "\n> ")
+		lines := strings.Split(body, "\n")
+		for i, l := range lines {
+			lines[i] = strings.TrimRight("> "+l, " ")
+		}
+		return strings.Join(lines, "\n")
 	case *ast.FencedCodeBlock, *ast.CodeBlock:
 		return "```\n" + codeLines(node, source) + "\n```"
 	case *ast.ThematicBreak:

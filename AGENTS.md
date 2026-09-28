@@ -24,6 +24,10 @@ make help
 - Cells are flattened to plain text (`plainText`) because Slack does not render mrkdwn in code blocks. Links become `label (url)`.
 - Width is approximated in `displayWidth` (CJK and emoji = 2). Slack's fallback fonts draw some of these slightly narrower, so a one-cell wobble on CJK/❌ rows is expected and not fixable here.
 - The Slack MCP `slack_send_message` tool takes standard markdown and escapes `&` itself, so `&amp;` looks double-escaped in test DMs. That is a test artifact, not a renderer bug.
+- Verified in real Slack (Sep 2026): a zero-width space stops `_` and `~` from opening emphasis but NOT `*` or a backtick, so an escaped `\*` becomes `∗` (U+2217) and an escaped backtick becomes `ˋ`. Bold/italic/strike/code markers inside a `<url|label>` label show up literally, so the converter strips them there. `` ``` `` inside a code block is broken with a zero-width space so nested fences do not close the block.
+- Quirk, not fixed: through the MCP tool, a nested list under the LAST item of its parent list renders flat (a following sibling item makes nesting work). Unknown whether that is Slack or the tool.
+- Unresolved: `&lt;`/`&amp;` inside code spans and fences display literally when sent through the MCP tool. The converter still escapes them (the Slack API says to escape everywhere); confirm by posting real mrkdwn through the API if it matters.
+- Automated visual check (macOS): send a test DM with `slack_send_message`, then `osascript -e 'tell application "Slack" to activate'`, `open "slack://channel?team=T0AC0E0A6DV&id=D098HJD7T8A"`, `screencapture -x`, crop with `sips -c H W --cropOffset Y X`, and read the PNG. Always bring Slack to the front first or the capture shows whatever window is on top.
 - To experiment: DM the user (Slack user id `U098HJD0MGS`) and ask for a screenshot; readback through the MCP cannot show glyph rendering.
 
 ## Releasing (macOS ARM64 only, on Nick's machine)
