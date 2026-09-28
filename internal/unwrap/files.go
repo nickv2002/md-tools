@@ -58,7 +58,8 @@ func atomicWrite(path string, data []byte) (err error) {
 	if err = tmp.Sync(); err != nil {
 		return err
 	}
-	if err = tmp.Chmod(info.Mode().Perm()); err != nil {
+	mode := info.Mode() & (os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
+	if err = tmp.Chmod(mode); err != nil {
 		return err
 	}
 	if err = tmp.Close(); err != nil {
