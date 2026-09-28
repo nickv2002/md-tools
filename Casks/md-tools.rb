@@ -1,8 +1,8 @@
 cask "md-tools" do
-  version "0.1.0"
+  version "0.1.1"
 
   on_macos do
-    sha256 "285bd84fb09dc815e0d67a694de732c96eb930319407f62496cc826f571afae8"
+    sha256 "f15e70a836c5cb4d671592f693dbb08ab5cbd2a852af3644bfb44a6e845a3cda"
 
     url "https://github.com/nickv2002/md-tools/releases/download/v#{version}/md-tools-darwin-arm64-v#{version}.zip"
 
@@ -10,11 +10,11 @@ cask "md-tools" do
   end
   on_linux do
     on_arm do
-      sha256 "b53d295fee3c4baabd5b90fc04c2cb1a524927d7b33902318ed83c87881ceed5"
+      sha256 "052565c8973a1fa5128d732718b0202cadcb3256c4b39cd53eead80fde1c9c91"
       url "https://github.com/nickv2002/md-tools/releases/download/v#{version}/md-tools-linux-arm64-v#{version}.zip"
     end
     on_intel do
-      sha256 "677b17249947ed02f5a9d5e8ebb72d94af992294863286c89256277a96fd59cc"
+      sha256 "5dfcc6fd35d7ea9afd8e1b4e193bcc1cda4a7aa91f12853f4312a2929aa100ac"
       url "https://github.com/nickv2002/md-tools/releases/download/v#{version}/md-tools-linux-amd64-v#{version}.zip"
     end
   end
