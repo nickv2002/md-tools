@@ -22,9 +22,13 @@ if git rev-parse --verify "$tag" >/dev/null 2>&1 || gh release view "$tag" >/dev
   echo "tag or release already exists: $tag" >&2
   exit 1
 fi
-for tool in go zip unzip jq op gh codesign xcrun shasum; do
+for tool in go zip unzip jq op gh codesign xcrun shasum brew; do
   command -v "$tool" >/dev/null || { echo "missing $tool" >&2; exit 1; }
 done
+op whoami --account nickfam.1password.com >/dev/null || {
+  echo "sign in to 1Password before releasing: op signin --account nickfam.1password.com" >&2
+  exit 1
+}
 
 dist="$root/dist/$tag"
 if [[ -e $dist ]]; then
@@ -102,18 +106,18 @@ mac_sha=$(shasum -a 256 "$mac_zip" | cut -d ' ' -f 1)
 amd_sha=$(shasum -a 256 "$dist/md-tools-linux-amd64-$tag.zip" | cut -d ' ' -f 1)
 arm_sha=$(shasum -a 256 "$dist/md-tools-linux-arm64-$tag.zip" | cut -d ' ' -f 1)
 
+echo "==> update Homebrew cask"
+"$root/scripts/render-cask.sh" "$version" "$mac_sha" "$amd_sha" "$arm_sha"
+brew audit --cask --strict "$root/Casks/md-tools.rb"
+git add Casks/md-tools.rb
+git -c commit.gpgsign=false commit -m "Update Homebrew cask for $tag"
+
 echo "==> tag and create draft release"
 git tag "$tag"
 git push origin main "$tag"
 gh release create "$tag" "$dist"/md-tools-*.zip "$dist/checksums.txt" \
   "$dist/notarization-log.json" --draft --title "$tag" \
   --notes "Signed and notarized macOS ARM64 and self-contained Linux AMD64/ARM64 CLI ZIPs."
-
-echo "==> update Homebrew cask"
-"$root/scripts/render-cask.sh" "$version" "$mac_sha" "$amd_sha" "$arm_sha"
-git add Casks/md-tools.rb
-git -c commit.gpgsign=false commit -m "Update Homebrew cask for $tag"
-git push origin main
 
 echo "==> publish release"
 gh release edit "$tag" --draft=false
