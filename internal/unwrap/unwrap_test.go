@@ -111,3 +111,43 @@ func TestRecursiveAndSymlinkSkip(t *testing.T) {
 		t.Fatal(out.String())
 	}
 }
+
+func TestNonInteractiveConfirmationDeclines(t *testing.T) {
+	inRead, inWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inRead.Close()
+	defer inWrite.Close()
+	outRead, outWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer outRead.Close()
+	defer outWrite.Close()
+	if ConfirmTTY(inRead, outWrite, 1) {
+		t.Fatal("accepted non-interactive confirmation")
+	}
+}
+
+func TestWriteFailureLeavesOriginal(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can write through directory permissions")
+	}
+	root := t.TempDir()
+	path := filepath.Join(root, "note.md")
+	if err := os.WriteFile(path, []byte("one\ntwo\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(root, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(root, 0755) })
+	if err := Process(path, &bytes.Buffer{}, nil); err == nil {
+		t.Fatal("rewrite in a read-only directory succeeded")
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != "one\ntwo\n" {
+		t.Fatalf("original changed: %q", data)
+	}
+}
