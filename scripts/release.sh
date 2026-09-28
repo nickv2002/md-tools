@@ -112,7 +112,7 @@ gh release create "$tag" "$dist"/md-tools-*.zip "$dist/checksums.txt" \
 echo "==> update Homebrew cask"
 "$root/scripts/render-cask.sh" "$version" "$mac_sha" "$amd_sha" "$arm_sha"
 git add Casks/md-tools.rb
-git commit -m "Update Homebrew cask for $tag"
+git -c commit.gpgsign=false commit -m "Update Homebrew cask for $tag"
 git push origin main
 
 echo "==> publish release"
