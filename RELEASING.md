@@ -12,9 +12,9 @@ scripts/release.sh v0.1.0
 ```
 
 The script tests, cross-builds with `CGO_ENABLED=0`, signs both Mac tools,
-notarizes the final Mac ZIP, checks signatures and archives, creates a draft
-GitHub release with three ZIPs and `checksums.txt`, updates the cask in this
-same repository, then publishes the release. It retrieves the App Store Connect
+notarizes the final Mac ZIP, checks signatures and archives, updates the cask
+in this same repository, creates a draft GitHub release with three ZIPs and
+`checksums.txt`, then publishes the release. It retrieves the App Store Connect
 API key from the same 1Password item used by `transgui`; it never commits the
 key or passes it to CI. Review the resulting release and run a fresh Homebrew
 install and quarantined-download test before removing a previous installation.

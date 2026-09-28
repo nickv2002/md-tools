@@ -28,19 +28,20 @@ cask "md-tools" do
   version "$version"
 
   on_macos do
-    depends_on arch: :arm
     sha256 "$mac_sha"
-    url "https://github.com/nickv2002/md-tools/releases/download/v#{version}/md-tools-darwin-arm64-v#{version}.zip"
-  end
 
+    url "https://github.com/nickv2002/md-tools/releases/download/v#{version}/md-tools-darwin-arm64-v#{version}.zip"
+
+    depends_on arch: :arm
+  end
   on_linux do
-    on_intel do
-      sha256 "$amd_sha"
-      url "https://github.com/nickv2002/md-tools/releases/download/v#{version}/md-tools-linux-amd64-v#{version}.zip"
-    end
     on_arm do
       sha256 "$arm_sha"
       url "https://github.com/nickv2002/md-tools/releases/download/v#{version}/md-tools-linux-arm64-v#{version}.zip"
+    end
+    on_intel do
+      sha256 "$amd_sha"
+      url "https://github.com/nickv2002/md-tools/releases/download/v#{version}/md-tools-linux-amd64-v#{version}.zip"
     end
   end
 
