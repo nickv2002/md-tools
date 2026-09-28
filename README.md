@@ -28,6 +28,9 @@ md2mkdwn notes.md          # Slack mrkdwn on stdout
 cat notes.md | md2mkdwn    # stdin also works
 ```
 
+Running either command without a file or piped input prints its help. Pipe
+Markdown into `md2mkdwn` to convert standard input.
+
 `mdunwrap` only accepts regular `.md` or `.markdown` files in single-file mode.
 Directory mode walks recursively, skips symlinks, and lists **only files that
 would change**. It requires an interactive yes/confirmation; non-interactive

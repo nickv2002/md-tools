@@ -15,8 +15,12 @@ import (
 func main() { os.Exit(run(os.Args[1:])) }
 
 func run(args []string) int {
+	return runWithIO(args, os.Stdin, os.Stdout, os.Stderr)
+}
+
+func runWithIO(args []string, stdin *os.File, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("md2mkdwn", flag.ContinueOnError)
-	flags.SetOutput(os.Stderr)
+	flags.SetOutput(stderr)
 	version := flags.Bool("version", false, "print version")
 	flags.Usage = func() {
 		fmt.Fprintln(flags.Output(), "Usage: md2mkdwn [FILE]")
@@ -30,7 +34,7 @@ func run(args []string) int {
 		return 2
 	}
 	if *version {
-		fmt.Println("md2mkdwn", cli.Version)
+		fmt.Fprintln(stdout, "md2mkdwn", cli.Version)
 		return 0
 	}
 	if flags.NArg() > 1 {
@@ -42,18 +46,35 @@ func run(args []string) int {
 	if flags.NArg() == 1 && flags.Arg(0) != "-" {
 		input, err = os.ReadFile(flags.Arg(0))
 	} else {
-		input, err = io.ReadAll(os.Stdin)
+		if flags.NArg() == 0 {
+			info, statErr := stdin.Stat()
+			if statErr != nil {
+				fmt.Fprintln(stderr, "md2mkdwn:", statErr)
+				return 1
+			}
+			if info.Mode()&os.ModeCharDevice != 0 {
+				flags.SetOutput(stdout)
+				flags.Usage()
+				return 0
+			}
+		}
+		input, err = io.ReadAll(stdin)
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "md2mkdwn:", err)
+		fmt.Fprintln(stderr, "md2mkdwn:", err)
 		return 1
+	}
+	if flags.NArg() == 0 && len(input) == 0 {
+		flags.SetOutput(stdout)
+		flags.Usage()
+		return 0
 	}
 	if !utf8.Valid(input) {
-		fmt.Fprintln(os.Stderr, "md2mkdwn: invalid UTF-8 input")
+		fmt.Fprintln(stderr, "md2mkdwn: invalid UTF-8 input")
 		return 1
 	}
-	if _, err := io.WriteString(os.Stdout, slack.Convert(input)); err != nil {
-		fmt.Fprintln(os.Stderr, "md2mkdwn:", err)
+	if _, err := io.WriteString(stdout, slack.Convert(input)); err != nil {
+		fmt.Fprintln(stderr, "md2mkdwn:", err)
 		return 1
 	}
 	return 0

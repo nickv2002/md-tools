@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -10,8 +11,20 @@ func TestCLI(t *testing.T) {
 	if run([]string{"--help"}) != 0 || run([]string{"--version"}) != 0 {
 		t.Fatal("help/version failed")
 	}
-	if run(nil) != 2 || run([]string{"a", "b"}) != 2 {
+	if run([]string{"a", "b"}) != 2 {
 		t.Fatal("invalid argument count accepted")
+	}
+	stdout, err := os.CreateTemp(t.TempDir(), "stdout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stdout.Close()
+	if got := runWithIO(nil, os.Stdin, stdout, os.Stderr); got != 0 {
+		t.Fatalf("bare invocation exited %d", got)
+	}
+	output, err := os.ReadFile(stdout.Name())
+	if err != nil || !strings.Contains(string(output), "Usage: mdunwrap FILE|DIRECTORY") {
+		t.Fatalf("bare invocation printed %q: %v", output, err)
 	}
 	root := t.TempDir()
 	notes := filepath.Join(root, "notes.md")
