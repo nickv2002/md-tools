@@ -13,7 +13,7 @@ func TestConvert(t *testing.T) {
 		{"fence", "```go\nfmt.Println(1)\n```", "```\nfmt.Println(1)\n```\n"},
 		{"quote", "> A line\n> another line", "> A line another line\n"},
 		{"list", "- One\n- Two\n", "- One\n- Two\n"},
-		{"table", "| A | B |\n| --- | --- |\n| one | two |", "```\nA | B\none | two\n```\n"},
+		{"table", "| A | B |\n| --- | --- |\n| one | two |", "```\nA   | B\n----+----\none | two\n```\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -21,6 +21,19 @@ func TestConvert(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestTableAlignmentAndPlainCells(t *testing.T) {
+	in := "| Name | N | C |\n| :-- | --: | :-: |\n| [a](https://x.io) **b** | 5 | ok |\n| 日本 | 1,250 | y |\n"
+	want := "```\n" +
+		"Name               |     N | C\n" +
+		"-------------------+-------+---\n" +
+		"a (https://x.io) b |     5 | ok\n" +
+		"日本               | 1,250 | y\n" +
+		"```\n"
+	if got := Convert([]byte(in)); got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
 }
 
