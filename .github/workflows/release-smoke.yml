@@ -1,0 +1,25 @@
+name: Release install smoke test
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Install Homebrew on Linux
+        if: runner.os == 'Linux'
+        run: |
+          NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+      - name: Install md-tools from the repository tap
+        run: |
+          brew tap nickv2002/md-tools https://github.com/nickv2002/md-tools
+          brew install --cask md-tools
+          mdunwrap --version
+          printf '# Heading\n' | md2mkdwn | grep -Fx '*Heading*'
