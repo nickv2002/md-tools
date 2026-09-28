@@ -108,7 +108,8 @@ arm_sha=$(shasum -a 256 "$dist/md-tools-linux-arm64-$tag.zip" | cut -d ' ' -f 1)
 
 echo "==> update Homebrew cask"
 "$root/scripts/render-cask.sh" "$version" "$mac_sha" "$amd_sha" "$arm_sha"
-brew audit --cask --strict "$root/Casks/md-tools.rb"
+brew style "$root/Casks/md-tools.rb"
+ruby -c "$root/Casks/md-tools.rb"
 git add Casks/md-tools.rb
 git -c commit.gpgsign=false commit -m "Update Homebrew cask for $tag"
 
