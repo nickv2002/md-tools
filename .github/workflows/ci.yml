@@ -1,0 +1,44 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./...
+      - run: |
+          test -z "$(gofmt -l cmd internal)"
+          go vet ./...
+      - run: |
+          CGO_ENABLED=0 go build -o /tmp/mdunwrap ./cmd/mdunwrap
+          CGO_ENABLED=0 go build -o /tmp/md2mkdwn ./cmd/md2mkdwn
+          /tmp/mdunwrap --version
+          printf '# Hello\n' | /tmp/md2mkdwn
+
+  cross-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: |
+          for target in linux/amd64 linux/arm64 darwin/arm64; do
+            os=${target%/*}
+            arch=${target#*/}
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build ./cmd/mdunwrap ./cmd/md2mkdwn
+          done
