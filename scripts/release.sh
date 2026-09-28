@@ -25,8 +25,9 @@ fi
 for tool in go zip unzip jq op gh codesign xcrun shasum brew; do
   command -v "$tool" >/dev/null || { echo "missing $tool" >&2; exit 1; }
 done
-op whoami --account nickfam.1password.com >/dev/null || {
-  echo "sign in to 1Password before releasing: op signin --account nickfam.1password.com" >&2
+op item get 'App Store Connect API Key File' --vault Private \
+  --account nickfam.1password.com --format json | jq -e '.files[0].name' >/dev/null || {
+  echo "approve 1Password access to the App Store Connect API key before releasing" >&2
   exit 1
 }
 
