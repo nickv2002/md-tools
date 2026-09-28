@@ -20,6 +20,7 @@ jobs:
       - name: Install md-tools from the repository tap
         run: |
           brew tap nickv2002/md-tools https://github.com/nickv2002/md-tools
+          brew trust --cask nickv2002/md-tools/md-tools
           brew install --cask md-tools
           mdunwrap --version
           printf '# Heading\n' | md2mkdwn | grep -Fx '*Heading*'
