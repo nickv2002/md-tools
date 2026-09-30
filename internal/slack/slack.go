@@ -212,6 +212,19 @@ func edgeRune(n ast.Node, source []byte, last bool) (rune, bool) {
 	return r, true
 }
 
+// closingPunct are the characters moved out of an italic that ends its parent span.
+const closingPunct = ".,;:!?…\"'”’)]"
+
+// isSpanParent reports whether n sits directly inside a bold, italic or
+// strikethrough span.
+func isSpanParent(n ast.Node) bool {
+	switch n.Parent().(type) {
+	case *ast.Emphasis, *extast.Strikethrough:
+		return true
+	}
+	return false
+}
+
 func isSpan(n ast.Node) bool {
 	switch n.(type) {
 	case *ast.Emphasis, *extast.Strikethrough, *ast.CodeSpan:
@@ -306,7 +319,16 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 			return childrenInline(n, source, c)
 		}
 		before, after := spanGap(n, source)
-		return wrapMarks(mark, childrenInline(n, source, inner), before, after)
+		body := childrenInline(n, source, inner)
+		if mark == "_" && n.NextSibling() == nil && isSpanParent(n) {
+			// Slack mis-pairs a later _ when an italic ends in punctuation right
+			// before the enclosing span closes (*_Note._*), so leave it outside.
+			trimmed := strings.TrimRight(body, closingPunct)
+			if trimmed != "" && trimmed != body {
+				return wrapMarks(mark, trimmed, before, "") + body[len(trimmed):] + after
+			}
+		}
+		return wrapMarks(mark, body, before, after)
 	case *extast.Strikethrough:
 		if c.link {
 			return childrenInline(n, source, c)
