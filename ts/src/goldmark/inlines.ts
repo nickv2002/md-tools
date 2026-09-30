@@ -14,7 +14,8 @@ const isSpaceOrNewline = (c: number): boolean => c === 0x20 || c === 0x0a
 function codeSpanIsBlank(node: GNode, source: Uint8Array): boolean {
   for (let c = node.firstChild; c !== null; c = c.next) {
     const v = c.segment.value(source)
-    for (const b of v) if (!(b === 0x20 || b === 0x09 || b === 0x0a || b === 0x0d)) return false
+    for (const b of v)
+      if (!(b === 0x20 || b === 0x09 || b === 0x0a || b === 0x0d)) return false
   }
   return true
 }
@@ -24,7 +25,11 @@ export const codeSpanParser: InlineParser = {
   parse(_parent, block) {
     const [line0, startSegment] = block.peekLine()
     let opener = 0
-    for (; opener < must(line0).length && must(line0)[opener] === 0x60; opener++);
+    for (
+      ;
+      opener < must(line0).length && must(line0)[opener] === 0x60;
+      opener++
+    );
     block.advance(opener)
     const [l, pos] = block.position()
     const node = new GNode('CodeSpan')
@@ -59,9 +64,11 @@ export const codeSpanParser: InlineParser = {
     if (!codeSpanIsBlank(node, source)) {
       let segment = must(node.firstChild).segment
       let shouldTrimmed = true
-      if (!(!segment.isEmpty() && isSpaceOrNewline(source[segment.start]))) shouldTrimmed = false
+      if (!(!segment.isEmpty() && isSpaceOrNewline(source[segment.start])))
+        shouldTrimmed = false
       segment = must(node.lastChild).segment
-      if (!(!segment.isEmpty() && isSpaceOrNewline(source[segment.stop - 1]))) shouldTrimmed = false
+      if (!(!segment.isEmpty() && isSpaceOrNewline(source[segment.stop - 1])))
+        shouldTrimmed = false
       if (shouldTrimmed) {
         const first = must(node.firstChild)
         first.segment = first.segment.withStart(first.segment.start + 1)
@@ -90,7 +97,12 @@ export const emphasisParser: InlineParser = {
   parse(_parent, block, pc) {
     const before = block.precedingCharacter()
     const [line, segment] = block.peekLine()
-    const node = scanDelimiter(must(line), before, 1, emphasisDelimiterProcessor)
+    const node = scanDelimiter(
+      must(line),
+      before,
+      1,
+      emphasisDelimiterProcessor
+    )
     if (node === null) return null
     node.segment = segment.withStop(segment.start + node.originalLength)
     block.advance(node.originalLength)
@@ -128,15 +140,19 @@ export const autoLinkParser: InlineParser = {
 
 const tagnamePattern = '([A-Za-z][A-Za-z0-9-]*)'
 const spaceOrOneNewline = '(?:[ \\t]|(?:\\r\\n|\\n){0,1})'
-const openTagRegexp = new RegExp('^<' + tagnamePattern + ATTRIBUTE_PATTERN + '*' + spaceOrOneNewline + '*/?>')
-const closeTagRegexp = new RegExp('^</' + tagnamePattern + spaceOrOneNewline + '*>')
+const openTagRegexp = new RegExp(
+  '^<' + tagnamePattern + ATTRIBUTE_PATTERN + '*' + spaceOrOneNewline + '*/?>'
+)
+const closeTagRegexp = new RegExp(
+  '^</' + tagnamePattern + spaceOrOneNewline + '*>'
+)
 
 const startsWith = (line: Uint8Array, prefix: string): boolean => {
   if (line.length < prefix.length) return false
-  for (let i = 0; i < prefix.length; i++) if (line[i] !== prefix.charCodeAt(i)) return false
+  for (let i = 0; i < prefix.length; i++)
+    if (line[i] !== prefix.charCodeAt(i)) return false
   return true
 }
-
 
 function indexOfSeq(line: Uint8Array, seq: string): number {
   return latin1(line).indexOf(seq)
@@ -210,7 +226,9 @@ function parseUntil(block: TextReader, closer: string): GNode | null {
     if (line === null) break
     const index = indexOfSeq(line, closer)
     if (index > -1) {
-      node.segments.append(segment.withStop(segment.start + index + closer.length))
+      node.segments.append(
+        segment.withStop(segment.start + index + closer.length)
+      )
       block.advance(index + closer.length)
       return node
     }
@@ -226,11 +244,19 @@ export const rawHTMLParser: InlineParser = {
   parse(_parent, block) {
     const [line0] = block.peekLine()
     const line = must(line0)
-    if (line.length > 1 && isAlphaNumeric(line[1])) return parseMultiLineRegexp(openTagRegexp, block)
-    if (line.length > 2 && line[1] === 0x2f && isAlphaNumeric(line[2])) return parseMultiLineRegexp(closeTagRegexp, block)
+    if (line.length > 1 && isAlphaNumeric(line[1]))
+      return parseMultiLineRegexp(openTagRegexp, block)
+    if (line.length > 2 && line[1] === 0x2f && isAlphaNumeric(line[2]))
+      return parseMultiLineRegexp(closeTagRegexp, block)
     if (startsWith(line, '<!--')) return parseComment(block)
     if (startsWith(line, '<?')) return parseUntil(block, '?>')
-    if (line.length > 2 && line[1] === 0x21 && line[2] >= 0x41 && line[2] <= 0x5a) return parseUntil(block, '>')
+    if (
+      line.length > 2 &&
+      line[1] === 0x21 &&
+      line[2] >= 0x41 &&
+      line[2] <= 0x5a
+    )
+      return parseUntil(block, '>')
     if (startsWith(line, '<![CDATA[')) return parseUntil(block, ']]>')
     return null
   },

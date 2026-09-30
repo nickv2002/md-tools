@@ -1,5 +1,14 @@
 import { Segment, Segments } from './segment.js'
-import { EOF, decodeRune, isBlank, isPunct, isRuneStart, isSpace, latin1, tabWidth } from './util.js'
+import {
+  EOF,
+  decodeRune,
+  isBlank,
+  isPunct,
+  isRuneStart,
+  isSpace,
+  latin1,
+  tabWidth,
+} from './util.js'
 
 const INVALID = -1
 
@@ -28,7 +37,11 @@ export interface TextReader {
   skipSpaces(): [Segment, number, boolean]
   skipBlankLines(): [Segment, number, boolean]
   match(reg: RegExp): boolean
-  findClosure(opener: number, closer: number, opts: FindClosureOptions): [Segments | null, boolean]
+  findClosure(
+    opener: number,
+    closer: number,
+    opts: FindClosureOptions
+  ): [Segments | null, boolean]
 }
 
 interface Pos {
@@ -117,7 +130,11 @@ abstract class BaseReader implements TextReader {
     }
   }
 
-  findClosure(opener: number, closer: number, opts: FindClosureOptions): [Segments | null, boolean] {
+  findClosure(
+    opener: number,
+    closer: number,
+    opts: FindClosureOptions
+  ): [Segments | null, boolean] {
     let opened = 1
     let codeSpanOpener = 0
     let closed = false
@@ -140,7 +157,12 @@ abstract class BaseReader implements TextReader {
             }
           }
           if (codeSpanCloser === codeSpanOpener) codeSpanOpener = 0
-        } else if (codeSpanOpener === 0 && c === 0x5c && i < bs.length - 1 && isPunct(bs[i + 1])) {
+        } else if (
+          codeSpanOpener === 0 &&
+          c === 0x5c &&
+          i < bs.length - 1 &&
+          isPunct(bs[i + 1])
+        ) {
           i += 2
           continue
         } else if (opts.codeSpan && codeSpanOpener === 0 && c === 0x60) {
@@ -225,7 +247,11 @@ export class SourceReader extends BaseReader {
 
   advance(n: number): void {
     this.cachedLineOffset = -1
-    if (this.peekedLine !== null && n < this.peekedLine.length && this.pos.padding === 0) {
+    if (
+      this.peekedLine !== null &&
+      n < this.peekedLine.length &&
+      this.pos.padding === 0
+    ) {
       this.pos.start += n
       this.peekedLine = null
       return
@@ -310,7 +336,8 @@ export class BlockReader extends BaseReader {
     this.last = 0
     this.cachedLineOffset = -1
     this.pos = { start: -1, stop: -1, padding: 0 }
-    if (this.segmentsLength > 0) this.last = this.segments.at(this.segmentsLength - 1).stop
+    if (this.segmentsLength > 0)
+      this.last = this.segments.at(this.segmentsLength - 1).stop
     this.advanceLine()
   }
 
@@ -343,7 +370,11 @@ export class BlockReader extends BaseReader {
   }
 
   peek(): number {
-    if (this.line < this.segmentsLength && this.pos.start >= 0 && this.pos.start < this.last) {
+    if (
+      this.line < this.segmentsLength &&
+      this.pos.start >= 0 &&
+      this.pos.start < this.last
+    ) {
       if (this.pos.padding !== 0) return 0x20
       return this.src[this.pos.start]
     }
@@ -351,7 +382,12 @@ export class BlockReader extends BaseReader {
   }
 
   peekLine(): [Uint8Array | null, Segment] {
-    if (this.line < this.segmentsLength && this.pos.start >= 0 && this.pos.start < this.last) return [seg(this.pos).value(this.src), seg(this.pos)]
+    if (
+      this.line < this.segmentsLength &&
+      this.pos.start >= 0 &&
+      this.pos.start < this.last
+    )
+      return [seg(this.pos).value(this.src), seg(this.pos)]
     return [null, seg(this.pos)]
   }
 
@@ -397,7 +433,8 @@ export class BlockReader extends BaseReader {
       }
     } else {
       this.pos = { start: pos.start, stop: pos.stop, padding: pos.padding }
-      if (this.line < this.segmentsLength) this.head = this.segments.at(line).start
+      if (this.line < this.segmentsLength)
+        this.head = this.segments.at(line).start
     }
   }
 
@@ -418,7 +455,8 @@ export class BlockReader extends BaseReader {
     const [line] = this.peekLine()
     if (line !== null) {
       parts.push(line)
-      for (let k = this.line + 1; k < this.segmentsLength; k++) parts.push(this.segments.at(k).value(this.src))
+      for (let k = this.line + 1; k < this.segmentsLength; k++)
+        parts.push(this.segments.at(k).value(this.src))
     }
     const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
     let at = 0
@@ -426,7 +464,7 @@ export class BlockReader extends BaseReader {
       all.set(p, at)
       at += p.length
     }
-    for (let i = 0; i < all.length; ) {
+    for (let i = 0; i < all.length;) {
       const [r, size] = decodeRune(all, i)
       if (r === 0xfffd) return latin1(all.subarray(0, i))
       i += size

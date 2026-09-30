@@ -19,7 +19,8 @@ export function firstDiff(a: Node, b: Node, path = 'Document'): string | null {
   for (let i = 0; i < len; i++) {
     const x = a.c[i]
     const y = b.c[i]
-    if (!x || !y) return `${path}: child ${i} go ${x ? compact(x) : 'missing'} vs ts ${y ? compact(y) : 'missing'}`
+    if (!x || !y)
+      return `${path}: child ${i} go ${x ? compact(x) : 'missing'} vs ts ${y ? compact(y) : 'missing'}`
     const d = firstDiff(x, y, `${path}/${x.k}[${i}]`)
     if (d) return d
   }

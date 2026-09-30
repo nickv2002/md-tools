@@ -1,9 +1,18 @@
-import { collapseUnicodeSpace, firstCodePoint, isSpace, lastCodePoint, trimRight, trimSpace, unescapeText } from './gotext.js'
+import {
+  collapseUnicodeSpace,
+  firstCodePoint,
+  isSpace,
+  lastCodePoint,
+  trimRight,
+  trimSpace,
+  unescapeText,
+} from './gotext.js'
 import { type Align, type Node, nextSibling, prevSibling } from './tree.js'
 import { displayWidth } from './width.js'
 import { must } from './must.js'
 
-const escape = (s: string): string => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+const escape = (s: string): string =>
+  s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 
 /** A zero-width space placed before a literal markup character stops Slack from treating it as an emphasis delimiter. */
 const ZERO_WIDTH_SPACE = '\u200b'
@@ -13,8 +22,19 @@ function slackURL(u: string): string {
   let out = ''
   for (const ch of u) {
     const r = must(ch.codePointAt(0))
-    if (ch === '|' || ch === ' ' || ch === '<' || ch === '>' || r < 0x20 || r === 0x7f || r === 0x85 || r === 0x2028 || r === 0x2029) {
-      for (const b of new TextEncoder().encode(ch)) out += '%' + b.toString(16).toUpperCase().padStart(2, '0')
+    if (
+      ch === '|' ||
+      ch === ' ' ||
+      ch === '<' ||
+      ch === '>' ||
+      r < 0x20 ||
+      r === 0x7f ||
+      r === 0x85 ||
+      r === 0x2028 ||
+      r === 0x2029
+    ) {
+      for (const b of new TextEncoder().encode(ch))
+        out += '%' + b.toString(16).toUpperCase().padStart(2, '0')
     } else {
       out += ch
     }
@@ -33,7 +53,13 @@ const LINK_SCHEMES = new Set(['http', 'https', 'mailto', 'tel', 'ftp'])
 function linkTarget(rawDest: string): { target: string; ok: boolean } {
   const dest = trimSpace(unescapeText(rawDest, false))
   const i = dest.search(/[:/?#]/)
-  if (i > 0 && dest.charAt(i) === ':' && LINK_SCHEMES.has(dest.slice(0, i).toLowerCase()) && dest.length > i + 1) return { target: dest, ok: true }
+  if (
+    i > 0 &&
+    dest.charAt(i) === ':' &&
+    LINK_SCHEMES.has(dest.slice(0, i).toLowerCase()) &&
+    dest.length > i + 1
+  )
+    return { target: dest, ok: true }
   return { target: dest, ok: false }
 }
 
@@ -49,7 +75,8 @@ function slackLink(rawDest: string, rawLabel: string): string {
 }
 
 /** Keeps ``` inside code content from closing the Slack code block. */
-const fenceSafe = (s: string): string => s.replaceAll('```', '``' + ZERO_WIDTH_SPACE + '`')
+const fenceSafe = (s: string): string =>
+  s.replaceAll('```', '``' + ZERO_WIDTH_SPACE + '`')
 
 /**
  * A near-invisible space Slack accepts as a word boundary. Slack only formats
@@ -67,14 +94,23 @@ const HAIR_SPACE = '\u200a'
  * punctuation, ) ] } ' \ | @ and &, is not a boundary. A code span also opens
  * after a backslash or another marker.
  */
-const OPEN_OK = new Set([...'([{".,;:!?-/#$%^+=—…“”‘’'].map((c) => must(c.codePointAt(0))))
-const CLOSE_OK = new Set([...')[]{}".,;:!?-/#$%^+=—…“”‘’'].map((c) => must(c.codePointAt(0))))
+const OPEN_OK = new Set(
+  [...'([{".,;:!?-/#$%^+=—…“”‘’'].map((c) => must(c.codePointAt(0)))
+)
+const CLOSE_OK = new Set(
+  [...')[]{}".,;:!?-/#$%^+=—…“”‘’'].map((c) => must(c.codePointAt(0)))
+)
 const CODE_OPEN_EXTRA = new Set([...'\\_*~'].map((c) => must(c.codePointAt(0))))
 
 /** Folds runs of ASCII whitespace to one space; Unicode spaces (the hair space) are left alone. */
-const collapseSpace = (s: string): string => s.split(/[ \t\n\r]+/).filter((f) => f !== '').join(' ')
+const collapseSpace = (s: string): string =>
+  s
+    .split(/[ \t\n\r]+/)
+    .filter((f) => f !== '')
+    .join(' ')
 
-const opensAfter = (r: number, code: boolean): boolean => isSpace(r) || OPEN_OK.has(r) || (code && CODE_OPEN_EXTRA.has(r))
+const opensAfter = (r: number, code: boolean): boolean =>
+  isSpace(r) || OPEN_OK.has(r) || (code && CODE_OPEN_EXTRA.has(r))
 const closesBefore = (r: number): boolean => isSpace(r) || CLOSE_OK.has(r)
 
 /** The first or last rune a sibling text node contributes, or null when the sibling is not plain text or ends in a line break. */
@@ -99,13 +135,16 @@ const CLOSING_PUNCT = '.,;:!?…"\'”’)]'
 function trimClosingPunct(body: string): string {
   const trimmed = trimRight(body, CLOSING_PUNCT)
   if (body.slice(trimmed.length).startsWith(';')) {
-    for (const e of ['&amp', '&lt', '&gt']) if (trimmed.endsWith(e)) return trimmed + ';'
+    for (const e of ['&amp', '&lt', '&gt'])
+      if (trimmed.endsWith(e)) return trimmed + ';'
   }
   return trimmed
 }
 
-const isSpanParent = (n: Node): boolean => n.parent?.k === 'Emphasis' || n.parent?.k === 'Strikethrough'
-const isSpan = (n: Node): boolean => n.k === 'Emphasis' || n.k === 'Strikethrough' || n.k === 'CodeSpan'
+const isSpanParent = (n: Node): boolean =>
+  n.parent?.k === 'Emphasis' || n.parent?.k === 'Strikethrough'
+const isSpan = (n: Node): boolean =>
+  n.k === 'Emphasis' || n.k === 'Strikethrough' || n.k === 'CodeSpan'
 
 /**
  * Whether a span next to sibling would fail to format in Slack: the sibling is
@@ -144,7 +183,12 @@ function flattened(n: Node, c: InlineCtx): string {
  * whitespace or crosses a line break, so edge whitespace moves outside the
  * markers and each line gets its own pair.
  */
-function wrapMarks(mark: string, inner: string, before: string, after: string): string {
+function wrapMarks(
+  mark: string,
+  inner: string,
+  before: string,
+  after: string
+): string {
   const core = trimSpace(inner)
   if (core === '') return inner
   const lead = inner.slice(0, inner.indexOf(core))
@@ -192,14 +236,23 @@ function renderInline(node: Node, c: InlineCtx): string {
       } else {
         inner.italic = true
       }
-      if ((mark === '*' && c.bold === true) || (mark === '_' && c.italic === true)) return flattened(node, c) // Slack cannot nest a style inside itself
+      if (
+        (mark === '*' && c.bold === true) ||
+        (mark === '_' && c.italic === true)
+      )
+        return flattened(node, c) // Slack cannot nest a style inside itself
       const { before, after } = spanGap(node)
       const body = childrenInline(node, inner)
       if (mark === '_' && nextSibling(node) === null && isSpanParent(node)) {
         // Slack mis-pairs a later _ when an italic ends in punctuation right
         // before the enclosing span closes (*_Note._*), so leave it outside.
         const trimmed = trimClosingPunct(body)
-        if (trimmed !== '' && trimmed !== body) return wrapMarks(mark, trimmed, before, '') + body.slice(trimmed.length) + after
+        if (trimmed !== '' && trimmed !== body)
+          return (
+            wrapMarks(mark, trimmed, before, '') +
+            body.slice(trimmed.length) +
+            after
+          )
       }
       return wrapMarks(mark, body, before, after)
     }
@@ -212,16 +265,23 @@ function renderInline(node: Node, c: InlineCtx): string {
     }
     case 'CodeSpan': {
       let raw = ''
-      for (const child of node.c) if (child.k === 'Text') raw += escape(child.v ?? '')
+      for (const child of node.c)
+        if (child.k === 'Text') raw += escape(child.v ?? '')
       // A line ending inside a code span is a space, and Slack only formats code that stays on one line.
-      const code = raw.replaceAll('\r\n', ' ').replaceAll('\n', ' ').replaceAll('\r', ' ')
+      const code = raw
+        .replaceAll('\r\n', ' ')
+        .replaceAll('\n', ' ')
+        .replaceAll('\r', ' ')
       if (c.plain) return code
       if (trimSpace(code) === '') return code // Slack shows an empty code span as bare backticks
       const { before, after } = spanGap(node)
       return before + '`' + code.replaceAll('`', 'ˋ') + '`' + after
     }
     case 'Link':
-      return slackLink(node.dest ?? '', childrenInline(node, { ...c, link: true }))
+      return slackLink(
+        node.dest ?? '',
+        childrenInline(node, { ...c, link: true })
+      )
     case 'AutoLink': {
       const url = node.v ?? ''
       if (node.email) return slackLink('mailto:' + url, escape(url))
@@ -425,7 +485,8 @@ function renderTable(n: Node, maxTable: number): string {
     const { target, ok } = linkTarget(dest)
     if (!ok) return ''
     const note: TableNote = { dest: target, row: row0, col: col0, label: '' }
-    if (link.k === 'Link') note.label = collapseSpace(childrenInline(link, { link: true }))
+    if (link.k === 'Link')
+      note.label = collapseSpace(childrenInline(link, { link: true }))
     else if (link.k === 'AutoLink') note.label = escape(link.v ?? '')
     notes.push(note)
     return `[${notes.length}]`
@@ -446,9 +507,11 @@ function renderTable(n: Node, maxTable: number): string {
   for (const cells of grid) cols = Math.max(cols, cells.length)
   const widths: number[] = new Array(cols).fill(0)
   for (const cells of grid) {
-    for (let i = 0; i < cells.length; i++) widths[i] = Math.max(widths[i], displayWidth(cells[i]))
+    for (let i = 0; i < cells.length; i++)
+      widths[i] = Math.max(widths[i], displayWidth(cells[i]))
   }
-  if (maxTable > 0 && gridWidth(widths) > maxTable && grid.length > 1) return renderTableRecords(n)
+  if (maxTable > 0 && gridWidth(widths) > maxTable && grid.length > 1)
+    return renderTableRecords(n)
   const alignOf = (i: number): Align => aligns[i] ?? 'none'
   const line = (cells: string[], header: boolean): string => {
     const parts: string[] = []
@@ -468,7 +531,9 @@ function renderTable(n: Node, maxTable: number): string {
     out.push(escape(line(cells, i === 0)))
     if (i === 0) out.push(rule.join('-+-'))
   })
-  return '```\n' + fenceSafe(out.join('\n')) + '\n```' + tableFootnotes(notes, grid)
+  return (
+    '```\n' + fenceSafe(out.join('\n')) + '\n```' + tableFootnotes(notes, grid)
+  )
 }
 
 /**
@@ -479,12 +544,19 @@ function renderTable(n: Node, maxTable: number): string {
 function tableFootnotes(notes: TableNote[], grid: string[][]): string {
   if (notes.length === 0) return ''
   const count = new Map<string, number>()
-  for (const note of notes) count.set(note.label, (count.get(note.label) ?? 0) + 1)
+  for (const note of notes)
+    count.set(note.label, (count.get(note.label) ?? 0) + 1)
   let out = ''
   notes.forEach((note, i) => {
     let label = note.label
     const first = grid[note.row]?.[0]
-    if ((count.get(label) ?? 0) > 1 && note.col > 0 && note.row < grid.length && grid[note.row].length > 0 && first !== '') {
+    if (
+      (count.get(label) ?? 0) > 1 &&
+      note.col > 0 &&
+      note.row < grid.length &&
+      grid[note.row].length > 0 &&
+      first !== ''
+    ) {
       label = escape(must(first)) + ' ' + label
     }
     out += `\n[${i + 1}] ${slackLink(note.dest, label)}`
@@ -505,12 +577,14 @@ function gridWidth(widths: number[]): number {
  * mrkdwn, so links and emphasis in cells keep working.
  */
 function renderTableRecords(n: Node): string {
-  const inline = (node: Node, c: InlineCtx): string => collapseSpace(childrenInline(node, c))
+  const inline = (node: Node, c: InlineCtx): string =>
+    collapseSpace(childrenInline(node, c))
   const headers: string[] = []
   const records: string[] = []
   for (const row of n.c) {
     if (row.k === 'TableHeader') {
-      for (const cell of row.c) headers.push(inline(cell, { plain: true, link: true }))
+      for (const cell of row.c)
+        headers.push(inline(cell, { plain: true, link: true }))
       continue
     }
     let title = ''
@@ -523,7 +597,8 @@ function renderTableRecords(n: Node): string {
       }
       let value = inline(cell, {})
       if (value === '') return
-      if (i < headers.length && headers[i] !== '') value = headers[i] + ': ' + value
+      if (i < headers.length && headers[i] !== '')
+        value = headers[i] + ': ' + value
       pairs.push(value)
     })
     let record = pairs.join(' · ')
@@ -559,7 +634,11 @@ function renderQuote(n: Node, depth: number, maxTable: number): string {
   for (const child of n.c) {
     const block = trimSpace(renderBlock(child, depth, maxTable))
     if (block === '') continue
-    if (child.k === 'FencedCodeBlock' || child.k === 'CodeBlock' || child.k === 'Table') {
+    if (
+      child.k === 'FencedCodeBlock' ||
+      child.k === 'CodeBlock' ||
+      child.k === 'Table'
+    ) {
       flush()
       parts.push(block)
     } else {

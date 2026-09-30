@@ -2,10 +2,32 @@ import { Segment, Segments } from './segment.js'
 import { must } from '../must.js'
 
 export type GKind =
-  | 'Document' | 'Paragraph' | 'TextBlock' | 'Heading' | 'ThematicBreak' | 'CodeBlock' | 'FencedCodeBlock' | 'Blockquote' | 'List' | 'ListItem' | 'HTMLBlock'
-  | 'Text' | 'CodeSpan' | 'Emphasis' | 'Link' | 'Image' | 'AutoLink' | 'RawHTML'
-  | 'Strikethrough' | 'TaskCheckBox' | 'Table' | 'TableHeader' | 'TableRow' | 'TableCell'
-  | 'Delimiter' | 'LinkLabelState'
+  | 'Document'
+  | 'Paragraph'
+  | 'TextBlock'
+  | 'Heading'
+  | 'ThematicBreak'
+  | 'CodeBlock'
+  | 'FencedCodeBlock'
+  | 'Blockquote'
+  | 'List'
+  | 'ListItem'
+  | 'HTMLBlock'
+  | 'Text'
+  | 'CodeSpan'
+  | 'Emphasis'
+  | 'Link'
+  | 'Image'
+  | 'AutoLink'
+  | 'RawHTML'
+  | 'Strikethrough'
+  | 'TaskCheckBox'
+  | 'Table'
+  | 'TableHeader'
+  | 'TableRow'
+  | 'TableCell'
+  | 'Delimiter'
+  | 'LinkLabelState'
 
 export type Alignment = 'left' | 'right' | 'center' | 'none'
 
@@ -72,7 +94,11 @@ export class GNode {
 
   get isRaw(): boolean {
     if (this.kind === 'Text') return this.raw
-    return this.kind === 'CodeBlock' || this.kind === 'FencedCodeBlock' || this.kind === 'HTMLBlock'
+    return (
+      this.kind === 'CodeBlock' ||
+      this.kind === 'FencedCodeBlock' ||
+      this.kind === 'HTMLBlock'
+    )
   }
 
   hasChildren(): boolean {
@@ -161,12 +187,17 @@ export function newRawText(segment: Segment): GNode {
 /** ast.MergeOrAppendTextSegment */
 export function mergeOrAppendTextSegment(parent: GNode, s: Segment): void {
   const last = parent.lastChild
-  if (last?.kind === 'Text' && last.segment.stop === s.start && !last.soft) last.segment = last.segment.withStop(s.stop)
+  if (last?.kind === 'Text' && last.segment.stop === s.start && !last.soft)
+    last.segment = last.segment.withStop(s.stop)
   else parent.appendChild(newText(s))
 }
 
 /** ast.MergeOrReplaceTextSegment */
-export function mergeOrReplaceTextSegment(parent: GNode, n: GNode, s: Segment): void {
+export function mergeOrReplaceTextSegment(
+  parent: GNode,
+  n: GNode,
+  s: Segment
+): void {
   const prev = n.prev
   if (prev?.kind === 'Text' && prev.segment.stop === s.start && !prev.soft) {
     prev.segment = prev.segment.withStop(s.stop)
@@ -176,17 +207,25 @@ export function mergeOrReplaceTextSegment(parent: GNode, n: GNode, s: Segment): 
   }
 }
 
-export const isParagraph = (n: GNode | null | undefined): boolean => !!n && n.kind === 'Paragraph'
+export const isParagraph = (n: GNode | null | undefined): boolean =>
+  !!n && n.kind === 'Paragraph'
 
-export function walk(n: GNode, walker: (n: GNode, entering: boolean) => 'stop' | 'skip' | 'continue'): void {
+export function walk(
+  n: GNode,
+  walker: (n: GNode, entering: boolean) => 'stop' | 'skip' | 'continue'
+): void {
   walkHelper(n, walker)
 }
 
-function walkHelper(n: GNode, walker: (n: GNode, entering: boolean) => 'stop' | 'skip' | 'continue'): 'stop' | 'continue' {
+function walkHelper(
+  n: GNode,
+  walker: (n: GNode, entering: boolean) => 'stop' | 'skip' | 'continue'
+): 'stop' | 'continue' {
   const status = walker(n, true)
   if (status === 'stop') return 'stop'
   if (status !== 'skip') {
-    for (let c = n.firstChild; c; c = c.next) if (walkHelper(c, walker) === 'stop') return 'stop'
+    for (let c = n.firstChild; c; c = c.next)
+      if (walkHelper(c, walker) === 'stop') return 'stop'
   }
   return walker(n, false) === 'stop' ? 'stop' : 'continue'
 }

@@ -1,9 +1,29 @@
 export type Kind =
-  | 'Document' | 'Paragraph' | 'TextBlock' | 'Heading' | 'List' | 'ListItem' | 'Blockquote'
-  | 'FencedCodeBlock' | 'CodeBlock' | 'ThematicBreak' | 'HTMLBlock'
-  | 'Table' | 'TableHeader' | 'TableRow' | 'TableCell'
-  | 'Text' | 'String' | 'Emphasis' | 'Strikethrough' | 'CodeSpan' | 'Link' | 'AutoLink' | 'Image'
-  | 'TaskCheckBox' | 'RawHTML'
+  | 'Document'
+  | 'Paragraph'
+  | 'TextBlock'
+  | 'Heading'
+  | 'List'
+  | 'ListItem'
+  | 'Blockquote'
+  | 'FencedCodeBlock'
+  | 'CodeBlock'
+  | 'ThematicBreak'
+  | 'HTMLBlock'
+  | 'Table'
+  | 'TableHeader'
+  | 'TableRow'
+  | 'TableCell'
+  | 'Text'
+  | 'String'
+  | 'Emphasis'
+  | 'Strikethrough'
+  | 'CodeSpan'
+  | 'Link'
+  | 'AutoLink'
+  | 'Image'
+  | 'TaskCheckBox'
+  | 'RawHTML'
 
 export type Align = 'none' | 'left' | 'right' | 'center'
 
@@ -40,8 +60,10 @@ export function link(root: Node): Node {
   return root
 }
 
-export const prevSibling = (n: Node): Node | null => n.parent?.c[n.index - 1] ?? null
-export const nextSibling = (n: Node): Node | null => n.parent?.c[n.index + 1] ?? null
+export const prevSibling = (n: Node): Node | null =>
+  n.parent?.c[n.index - 1] ?? null
+export const nextSibling = (n: Node): Node | null =>
+  n.parent?.c[n.index + 1] ?? null
 
 interface JsonNode {
   k: Kind
@@ -58,9 +80,29 @@ export function fromJSON(j: JsonNode): Node {
 /** Plain structural form for comparing two trees. */
 export function plain(n: Node): unknown {
   const out: Record<string, unknown> = { k: n.k }
-  for (const key of ['v', 'soft', 'hard', 'level', 'ordered', 'count', 'start', 'dest', 'email', 'checked', 'aligns', 'lines'] as const) {
+  for (const key of [
+    'v',
+    'soft',
+    'hard',
+    'level',
+    'ordered',
+    'count',
+    'start',
+    'dest',
+    'email',
+    'checked',
+    'aligns',
+    'lines',
+  ] as const) {
     const val = n[key]
-    if (val !== undefined && val !== false && val !== 0 && val !== '' && !(Array.isArray(val) && val.length === 0)) out[key] = val
+    if (
+      val !== undefined &&
+      val !== false &&
+      val !== 0 &&
+      val !== '' &&
+      !(Array.isArray(val) && val.length === 0)
+    )
+      out[key] = val
   }
   if (n.c.length > 0) out.c = n.c.map(plain)
   return out

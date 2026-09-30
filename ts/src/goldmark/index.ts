@@ -1,7 +1,30 @@
 import { type GNode } from './ast.js'
-import { atxHeadingParser, blockquoteParser, codeBlockParser, fencedCodeBlockParser, htmlBlockParser, linkReferenceParagraphTransformer, listItemParser, listParser, paragraphParser, setextHeadingParser, thematicBreakParser } from './blocks.js'
-import { strikethroughParser, linkifyParser, tableASTTransformer, tableParagraphTransformer, taskCheckBoxParser } from './ext.js'
-import { autoLinkParser, codeSpanParser, emphasisParser, rawHTMLParser } from './inlines.js'
+import {
+  atxHeadingParser,
+  blockquoteParser,
+  codeBlockParser,
+  fencedCodeBlockParser,
+  htmlBlockParser,
+  linkReferenceParagraphTransformer,
+  listItemParser,
+  listParser,
+  paragraphParser,
+  setextHeadingParser,
+  thematicBreakParser,
+} from './blocks.js'
+import {
+  strikethroughParser,
+  linkifyParser,
+  tableASTTransformer,
+  tableParagraphTransformer,
+  taskCheckBoxParser,
+} from './ext.js'
+import {
+  autoLinkParser,
+  codeSpanParser,
+  emphasisParser,
+  rawHTMLParser,
+} from './inlines.js'
 import { linkParser } from './link.js'
 import { Parser } from './parser.js'
 

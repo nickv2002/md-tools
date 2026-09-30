@@ -6,7 +6,7 @@ export class Segment {
     readonly start: number,
     readonly stop: number,
     readonly padding = 0,
-    readonly forceNewline = false,
+    readonly forceNewline = false
   ) {}
 
   /** The bytes this segment stands for, padding spaces included. */
@@ -19,7 +19,11 @@ export class Segment {
       result.fill(0x20, 0, this.padding)
       result.set(buffer.subarray(this.start, this.stop), this.padding)
     }
-    if (this.forceNewline && result.length > 0 && result[result.length - 1] !== 0x0a) {
+    if (
+      this.forceNewline &&
+      result.length > 0 &&
+      result[result.length - 1] !== 0x0a
+    ) {
       const withNewline = new Uint8Array(result.length + 1)
       withNewline.set(result)
       withNewline[result.length] = 0x0a
