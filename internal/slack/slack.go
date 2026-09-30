@@ -212,18 +212,32 @@ func edgeRune(n ast.Node, source []byte, last bool) (rune, bool) {
 	return r, true
 }
 
-// emphasisGap returns the hair spaces needed outside an emphasis span whose
-// neighbours are word characters.
-func emphasisGap(n ast.Node, source []byte) (before, after string) {
-	if prev := n.PreviousSibling(); prev != nil {
-		if r, ok := edgeRune(prev, source, true); ok && touchesWord(r) {
-			before = hairSpace
-		}
+func isSpan(n ast.Node) bool {
+	switch n.(type) {
+	case *ast.Emphasis, *extast.Strikethrough, *ast.CodeSpan:
+		return true
 	}
-	if next := n.NextSibling(); next != nil {
-		if r, ok := edgeRune(next, source, false); ok && touchesWord(r) {
-			after = hairSpace
-		}
+	return false
+}
+
+// needsGap reports whether a span next to sibling would fail to format in
+// Slack: the sibling is a word character, or another span that ends in a
+// marker (Slack does not open a span right after a closing marker).
+func needsGap(sibling ast.Node, source []byte, last bool) bool {
+	if isSpan(sibling) {
+		return true
+	}
+	r, ok := edgeRune(sibling, source, last)
+	return ok && touchesWord(r)
+}
+
+// spanGap returns the hair spaces needed outside a marked-up span.
+func spanGap(n ast.Node, source []byte) (before, after string) {
+	if prev := n.PreviousSibling(); prev != nil && needsGap(prev, source, true) && !isSpan(prev) {
+		before = hairSpace // a preceding span already adds its own gap after itself
+	}
+	if next := n.NextSibling(); next != nil && needsGap(next, source, false) {
+		after = hairSpace
 	}
 	return before, after
 }
@@ -250,8 +264,10 @@ func wrapMarks(mark, inner, before, after string) string {
 
 // inlineCtx tracks enclosing markup while rendering inline nodes.
 type inlineCtx struct {
-	bold bool // inside a heading, already rendered bold
-	link bool // inside a link label, where nested links cannot exist
+	bold   bool // inside a heading or bold span, already bold
+	italic bool // inside an italic span
+	strike bool // inside a strikethrough span
+	link   bool // inside a link label, where nested links cannot exist
 }
 
 func childrenInline(node ast.Node, source []byte, c inlineCtx) string {
@@ -279,20 +295,27 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 		if c.link { // Slack shows emphasis markers literally inside a link label
 			return childrenInline(n, source, c)
 		}
-		mark := "_"
+		mark, inner := "_", c
 		if n.Level >= 2 {
-			if c.bold {
-				return childrenInline(n, source, c)
-			}
 			mark = "*"
+			inner.bold = true
+		} else {
+			inner.italic = true
 		}
-		before, after := emphasisGap(n, source)
-		return wrapMarks(mark, childrenInline(n, source, c), before, after)
+		if (mark == "*" && c.bold) || (mark == "_" && c.italic) { // Slack cannot nest a style inside itself
+			return childrenInline(n, source, c)
+		}
+		before, after := spanGap(n, source)
+		return wrapMarks(mark, childrenInline(n, source, inner), before, after)
 	case *extast.Strikethrough:
 		if c.link {
 			return childrenInline(n, source, c)
 		}
-		before, after := emphasisGap(n, source)
+		if c.strike {
+			return childrenInline(n, source, c)
+		}
+		c.strike = true
+		before, after := spanGap(n, source)
 		return wrapMarks("~", childrenInline(n, source, c), before, after)
 	case *ast.CodeSpan:
 		var b strings.Builder
@@ -310,7 +333,8 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 		if strings.TrimSpace(b.String()) == "" {
 			return b.String() // Slack shows an empty code span as bare backticks
 		}
-		return "`" + strings.ReplaceAll(b.String(), "`", "ˋ") + "`"
+		before, after := spanGap(n, source)
+		return before + "`" + strings.ReplaceAll(b.String(), "`", "ˋ") + "`" + after
 	case *ast.Link:
 		c.link = true
 		return slackLink(string(n.Destination), childrenInline(n, source, c))

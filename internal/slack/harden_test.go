@@ -293,7 +293,11 @@ func TestEmphasisTouchingWordsGetsHairSpace(t *testing.T) {
 		{"soft line break is a boundary", "a\n**b**\nc", "a *b* c\n"},
 		{"strikethrough gets the same gap", "a~~b~~c", "a" + h + "~b~" + h + "c\n"},
 		{"strikethrough at word edges needs none", "a ~~b~~, c", "a ~b~, c\n"},
-		{"adjacent emphasis needs no gap", "**a**_b_", "*a*_b_\n"},
+		{"adjacent spans are separated", "**a**_b_", "*a*" + h + "_b_\n"},
+		{"code span after a word", "日本`x`, y", "日本" + h + "`x`, y\n"},
+		{"code span before a word", "`x`y", "`x`" + h + "y\n"},
+		{"span after a code span", "`c`*b*", "`c`" + h + "_b_\n"},
+		{"code span between spaces needs none", "a `x` b", "a `x` b\n"},
 		{"link neighbour needs no gap", "[l](https://x.io)**b**", "<https://x.io|l>*b*\n"},
 	})
 }
@@ -344,5 +348,16 @@ func TestEmphasisSlackWillNotFormat(t *testing.T) {
 		{"strikethrough across hard break", "~~a  \nb~~", "~a~\n~b~\n"},
 		{"edge whitespace moves outside the markers", "a *<br>b<br>* c", "a \n_b_\n c\n"},
 		{"nested emphasis keeps working", "***a** b*", "_*a* b_\n"},
+	})
+}
+
+func TestNestedSameStyleIsFlattened(t *testing.T) {
+	runCases(t, []struct{ name, input, want string }{
+		{"bold in bold", "**__a-b a__**", "*a-b a*\n"},
+		{"italic in italic", "*a *b* c*", "_a b c_\n"},
+		{"strike in strike", "~~a ~~b~~ c~~", "~a b c~\n"},
+		{"bold in italic in bold", "**a *b **c** d* e**", "*a _b c d_ e*\n"},
+		{"different styles still nest", "_a **b** c_", "_a *b* c_\n"},
+		{"link keeps outer emphasis", "*[l](https://x.io)*", "_<https://x.io|l>_\n"},
 	})
 }
