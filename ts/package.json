@@ -9,11 +9,7 @@
     "parity": "tsx parity/run.ts"
   },
   "dependencies": {
-    "@types/mdast": "^4.0.4",
-    "decode-named-character-reference": "^1.3.0",
-    "mdast-util-from-markdown": "^2.0.3",
-    "mdast-util-gfm": "^3.1.0",
-    "micromark-extension-gfm": "^3.0.0"
+    "decode-named-character-reference": "^1.3.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
