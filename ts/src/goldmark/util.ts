@@ -1,4 +1,5 @@
 import { CASE_FOLDING } from './casefold.js'
+import { must } from '../must.js'
 // Byte-level helpers ported from goldmark's util package. The parser works on
 // UTF-8 bytes (Uint8Array), exactly as goldmark does, so offsets and ASCII
 // classification behave identically.
@@ -18,7 +19,7 @@ export const isAlphaNumeric = (c: number): boolean => (c >= 0x61 && c <= 0x7a) |
 const SPACES_TRIM = new Set([0x20, 0x09, 0x0a, 0x0b, 0x0c, 0x0d])
 
 export function isBlank(bs: Uint8Array): boolean {
-  for (let i = 0; i < bs.length; i++) if (!isSpace(bs[i]!)) return false
+  for (let i = 0; i < bs.length; i++) if (!isSpace(bs[i])) return false
   return true
 }
 
@@ -52,7 +53,7 @@ export function indentWidth(bs: Uint8Array, currentPos: number): [number, number
   let width = 0
   let pos = 0
   for (let i = 0; i < bs.length; i++) {
-    const b = bs[i]!
+    const b = bs[i]
     if (b === 0x20) {
       width++
       pos++
@@ -66,7 +67,7 @@ export function indentWidth(bs: Uint8Array, currentPos: number): [number, number
 
 export function firstNonSpacePosition(bs: Uint8Array): number {
   for (let i = 0; i < bs.length; i++) {
-    const c = bs[i]!
+    const c = bs[i]
     if (c === 0x20 || c === 0x09) continue
     if (c === 0x0a) return -1
     return i
@@ -76,26 +77,26 @@ export function firstNonSpacePosition(bs: Uint8Array): number {
 
 export function trimLeftLength(source: Uint8Array, chars: readonly number[]): number {
   let i = 0
-  while (i < source.length && chars.includes(source[i]!)) i++
+  while (i < source.length && chars.includes(source[i])) i++
   return i
 }
 
 export function trimRightLength(source: Uint8Array, chars: readonly number[]): number {
   let i = source.length - 1
-  while (i >= 0 && chars.includes(source[i]!)) i--
+  while (i >= 0 && chars.includes(source[i])) i--
   return source.length - (i + 1)
 }
 
 export function trimLeftSpaceLength(source: Uint8Array): number {
   let i = 0
-  while (i < source.length && isSpace(source[i]!)) i++
+  while (i < source.length && isSpace(source[i])) i++
   return i
 }
 
 export function trimRightSpaceLength(source: Uint8Array): number {
   const l = source.length
   let i = l - 1
-  while (i >= 0 && isSpace(source[i]!)) i--
+  while (i >= 0 && isSpace(source[i])) i--
   return i < 0 ? l : l - 1 - i
 }
 
@@ -103,8 +104,8 @@ export function trimRightSpaceLength(source: Uint8Array): number {
 export function trimSpaceWide(source: Uint8Array): Uint8Array {
   let a = 0
   let b = source.length
-  while (a < b && SPACES_TRIM.has(source[a]!)) a++
-  while (b > a && SPACES_TRIM.has(source[b - 1]!)) b--
+  while (a < b && SPACES_TRIM.has(source[a])) a++
+  while (b > a && SPACES_TRIM.has(source[b - 1])) b--
   return source.subarray(a, b)
 }
 
@@ -126,9 +127,9 @@ export const isRuneStart = (b: number): boolean => (b & 0xc0) !== 0x80
 export function decodeRune(b: Uint8Array, i = 0): [number, number] {
   const n = b.length - i
   if (n <= 0) return [0xfffd, 0]
-  const b0 = b[i]!
+  const b0 = b[i]
   if (b0 < 0x80) return [b0, 1]
-  const cont = (k: number): number => (i + k < b.length && (b[i + k]! & 0xc0) === 0x80 ? b[i + k]! & 0x3f : -1)
+  const cont = (k: number): number => (i + k < b.length && (b[i + k] & 0xc0) === 0x80 ? b[i + k] & 0x3f : -1)
   if (b0 >= 0xc2 && b0 <= 0xdf) {
     const c1 = cont(1)
     if (c1 >= 0) return [((b0 & 0x1f) << 6) | c1, 2]
@@ -137,14 +138,14 @@ export function decodeRune(b: Uint8Array, i = 0): [number, number] {
     const c2 = cont(2)
     const lo = b0 === 0xe0 ? 0xa0 : 0x80
     const hi = b0 === 0xed ? 0x9f : 0xbf
-    if (c1 >= 0 && c2 >= 0 && b[i + 1]! >= lo && b[i + 1]! <= hi) return [((b0 & 0x0f) << 12) | (c1 << 6) | c2, 3]
+    if (c1 >= 0 && c2 >= 0 && b[i + 1] >= lo && b[i + 1] <= hi) return [((b0 & 0x0f) << 12) | (c1 << 6) | c2, 3]
   } else if (b0 >= 0xf0 && b0 <= 0xf4) {
     const c1 = cont(1)
     const c2 = cont(2)
     const c3 = cont(3)
     const lo = b0 === 0xf0 ? 0x90 : 0x80
     const hi = b0 === 0xf4 ? 0x8f : 0xbf
-    if (c1 >= 0 && c2 >= 0 && c3 >= 0 && b[i + 1]! >= lo && b[i + 1]! <= hi) return [((b0 & 0x07) << 18) | (c1 << 12) | (c2 << 6) | c3, 4]
+    if (c1 >= 0 && c2 >= 0 && c3 >= 0 && b[i + 1] >= lo && b[i + 1] <= hi) return [((b0 & 0x07) << 18) | (c1 << 12) | (c2 << 6) | c3, 4]
   }
   return [0xfffd, 1]
 }
@@ -152,7 +153,7 @@ export function decodeRune(b: Uint8Array, i = 0): [number, number] {
 /** util.ToRune: decode the rune that contains the byte at pos. */
 export function toRune(source: Uint8Array, pos: number): number {
   let i = pos
-  for (; i >= 0; i--) if (isRuneStart(source[i]!)) break
+  for (; i >= 0; i--) if (isRuneStart(source[i])) break
   return decodeRune(source, Math.max(i, 0))[0]
 }
 
@@ -170,14 +171,14 @@ export function findURLIndex(b: Uint8Array): number {
   let i = 0
   const schemeStart = (c: number): boolean => (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a)
   const schemeRest = (c: number): boolean => schemeStart(c) || (c >= 0x30 && c <= 0x39) || c === 0x2e || c === 0x2b || c === 0x2d
-  if (!(b.length > 0 && schemeStart(b[0]!))) return -1
+  if (!(b.length > 0 && schemeStart(b[0]))) return -1
   i++
-  for (; i < b.length; i++) if (!schemeRest(b[i]!)) break
+  for (; i < b.length; i++) if (!schemeRest(b[i])) break
   if (i === 1 || i > 33 || i >= b.length) return -1
   if (b[i] !== 0x3a) return -1
   i++
   for (; i < b.length; i++) {
-    const c = b[i]!
+    const c = b[i]
     if (c <= 0x20 || c === 0x3c || c === 0x3e) break
   }
   return i
@@ -190,7 +191,7 @@ const EMAIL_DOMAIN = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z
 /** FindEmailIndex: stop index if b starts like an email address, or -1. */
 export function findEmailIndex(b: Uint8Array): number {
   let i = 0
-  for (; i < b.length; i++) if (!isEmailLocal(b[i]!)) break
+  for (; i < b.length; i++) if (!isEmailLocal(b[i])) break
   if (i === 0) return -1
   if (i >= b.length || b[i] !== 0x40) return -1
   i++
@@ -221,7 +222,7 @@ export function toLinkReference(v: Uint8Array): string {
 function foldCase(s: string): string {
   let out = ''
   for (const ch of s) {
-    const cp = ch.codePointAt(0)!
+    const cp = must(ch.codePointAt(0))
     if (cp < 0x80) out += cp >= 0x41 && cp <= 0x5a ? String.fromCharCode(cp + 32) : ch
     else out += CASE_FOLDING.get(cp) ?? ch
   }

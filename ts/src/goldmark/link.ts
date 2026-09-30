@@ -3,6 +3,7 @@ import { type InlineParser, type Context, linkLabelStateKey, processDelimiters }
 import type { FindClosureOptions, TextReader } from './reader.js'
 import { Segment } from './segment.js'
 import { isBlank, isPunct, isSpace, toLinkReference } from './util.js'
+import { must } from '../must.js'
 
 export const LINK_FIND_CLOSURE_OPTIONS: FindClosureOptions = { nesting: false, newline: true, advance: true }
 
@@ -14,7 +15,7 @@ function newLinkLabelState(segment: Segment, isImage: boolean): GNode {
 }
 
 function linkLabelStateLength(v: GNode | undefined): number {
-  if (!v || !v.labelLast || !v.labelFirst) return 0
+  if (!v?.labelLast || !v.labelFirst) return 0
   return v.labelLast.segment.stop - v.labelFirst.segment.start
 }
 
@@ -25,7 +26,7 @@ function pushLinkLabelState(pc: Context, v: GNode): void {
     v.labelLast = v
     pc.set(linkLabelStateKey, v)
   } else {
-    const l = list.labelLast!
+    const l = must(list.labelLast)
     list.labelLast = v
     l.labelNext = v
     v.labelPrev = l
@@ -114,8 +115,8 @@ export function parseLinkDestination(block: TextReader): [Uint8Array | null, boo
   if (block.peek() === 0x3c) {
     let i = 1
     while (i < line.length) {
-      const c = line[i]!
-      if (c === 0x5c && i < line.length - 1 && isPunct(line[i + 1]!)) {
+      const c = line[i]
+      if (c === 0x5c && i < line.length - 1 && isPunct(line[i + 1])) {
         i += 2
         continue
       } else if (c === 0x3e) {
@@ -129,8 +130,8 @@ export function parseLinkDestination(block: TextReader): [Uint8Array | null, boo
   let opened = 0
   let i = 0
   while (i < line.length) {
-    const c = line[i]!
-    if (c === 0x5c && i < line.length - 1 && isPunct(line[i + 1]!)) {
+    const c = line[i]
+    if (c === 0x5c && i < line.length - 1 && isPunct(line[i + 1])) {
       i += 2
       continue
     } else if (c === 0x28) {
@@ -154,7 +155,7 @@ function parseLinkTitle(block: TextReader): [Uint8Array | null, boolean] {
   const closer = opener === 0x28 ? 0x29 : opener
   block.advance(1)
   const [segments, found] = block.findClosure(opener, closer, LINK_FIND_CLOSURE_OPTIONS)
-  if (found) return [concatSegments(block, segments!), true]
+  if (found) return [concatSegments(block, must(segments)), true]
   return [null, false]
 }
 
@@ -167,7 +168,7 @@ function parseReferenceLink(parent: GNode, last: GNode, block: TextReader, pc: C
   block.advance(1) // skip '['
   const [segments, found] = block.findClosure(0x5b, 0x5d, LINK_FIND_CLOSURE_OPTIONS)
   if (!found) return [null, false]
-  let maybeReference = concatSegments(block, segments!)
+  let maybeReference = concatSegments(block, must(segments))
   if (isBlank(maybeReference)) {
     // collapsed reference link
     maybeReference = block.value(new Segment(last.segment.stop, orgpos.start - 1))
@@ -229,7 +230,7 @@ export const linkParser: InlineParser = {
   trigger: [0x21, 0x5b, 0x5d],
   parse(parent, block, pc) {
     const [line0, segment] = block.peekLine()
-    const line = line0!
+    const line = must(line0)
     if (line[0] === 0x21) {
       if (line.length > 1 && line[1] === 0x5b) {
         block.advance(1)
@@ -254,13 +255,13 @@ export const linkParser: InlineParser = {
     removeLinkLabelState(pc, last)
     // CommonMark spec says: "Unmatched brackets' length is limited to 999 characters".
     if (linkLabelStateLength(tlist) > 998) {
-      mergeOrReplaceTextSegment(last.parent!, last, last.segment)
+      mergeOrReplaceTextSegment(must(last.parent), last, last.segment)
       popLinkBottom(pc)
       return null
     }
     if (!last.isImage && containsLink(last)) {
       // a link in a link text is not allowed
-      mergeOrReplaceTextSegment(last.parent!, last, last.segment)
+      mergeOrReplaceTextSegment(must(last.parent), last, last.segment)
       popLinkBottom(pc)
       return null
     }
@@ -275,7 +276,7 @@ export const linkParser: InlineParser = {
       // reference link
       ;[link, hasValue] = parseReferenceLink(parent, last, block, pc)
       if (link === null && hasValue) {
-        mergeOrReplaceTextSegment(last.parent!, last, last.segment)
+        mergeOrReplaceTextSegment(must(last.parent), last, last.segment)
         popLinkBottom(pc)
         return null
       }
@@ -287,13 +288,13 @@ export const linkParser: InlineParser = {
       const maybeReference = block.value(ssegment)
       // CommonMark spec says: "A link label can have at most 999 characters inside the square brackets"
       if (maybeReference.length > 999) {
-        mergeOrReplaceTextSegment(last.parent!, last, last.segment)
+        mergeOrReplaceTextSegment(must(last.parent), last, last.segment)
         popLinkBottom(pc)
         return null
       }
       const ref = pc.reference(toLinkReference(maybeReference))
       if (ref === undefined) {
-        mergeOrReplaceTextSegment(last.parent!, last, last.segment)
+        mergeOrReplaceTextSegment(must(last.parent), last, last.segment)
         popLinkBottom(pc)
         return null
       }
@@ -302,7 +303,7 @@ export const linkParser: InlineParser = {
       link.title = ref.title
       link.destination = ref.destination
     }
-    const lastParent = last.parent!
+    const lastParent = must(last.parent)
     if (last.isImage) {
       lastParent.removeChild(last)
       return newImage(link)
@@ -317,7 +318,7 @@ export const linkParser: InlineParser = {
     for (let s: GNode | null = tlist; s !== null; ) {
       const next: GNode | null = s.labelNext
       removeLinkLabelState(pc, s)
-      s.parent!.replaceChild(s, newText(s.segment))
+      must(s.parent).replaceChild(s, newText(s.segment))
       s = next
     }
   },

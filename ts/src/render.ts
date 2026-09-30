@@ -1,6 +1,7 @@
 import { collapseUnicodeSpace, firstCodePoint, isSpace, lastCodePoint, trimRight, trimSpace, unescapeText } from './gotext.js'
 import { type Align, type Node, nextSibling, prevSibling } from './tree.js'
 import { displayWidth } from './width.js'
+import { must } from './must.js'
 
 const escape = (s: string): string => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 
@@ -11,7 +12,7 @@ const ZERO_WIDTH_SPACE = '\u200b'
 function slackURL(u: string): string {
   let out = ''
   for (const ch of u) {
-    const r = ch.codePointAt(0)!
+    const r = must(ch.codePointAt(0))
     if (ch === '|' || ch === ' ' || ch === '<' || ch === '>' || r < 0x20 || r === 0x7f || r === 0x85 || r === 0x2028 || r === 0x2029) {
       for (const b of new TextEncoder().encode(ch)) out += '%' + b.toString(16).toUpperCase().padStart(2, '0')
     } else {
@@ -66,9 +67,9 @@ const HAIR_SPACE = '\u200a'
  * punctuation, ) ] } ' \ | @ and &, is not a boundary. A code span also opens
  * after a backslash or another marker.
  */
-const OPEN_OK = new Set([...'([{".,;:!?-/#$%^+=—…“”‘’'].map((c) => c.codePointAt(0)!))
-const CLOSE_OK = new Set([...')[]{}".,;:!?-/#$%^+=—…“”‘’'].map((c) => c.codePointAt(0)!))
-const CODE_OPEN_EXTRA = new Set([...'\\_*~'].map((c) => c.codePointAt(0)!))
+const OPEN_OK = new Set([...'([{".,;:!?-/#$%^+=—…“”‘’'].map((c) => must(c.codePointAt(0))))
+const CLOSE_OK = new Set([...')[]{}".,;:!?-/#$%^+=—…“”‘’'].map((c) => must(c.codePointAt(0))))
+const CODE_OPEN_EXTRA = new Set([...'\\_*~'].map((c) => must(c.codePointAt(0))))
 
 /** Folds runs of ASCII whitespace to one space; Unicode spaces (the hair space) are left alone. */
 const collapseSpace = (s: string): string => s.split(/[ \t\n\r]+/).filter((f) => f !== '').join(' ')
@@ -80,7 +81,7 @@ const closesBefore = (r: number): boolean => isSpace(r) || CLOSE_OK.has(r)
 function edgeRune(n: Node, last: boolean): number | null {
   let v: string
   if (n.k === 'Text') {
-    if (last && (n.soft || n.hard)) return null
+    if (last && (n.soft === true || n.hard === true)) return null
     v = n.v ?? ''
   } else if (n.k === 'String') {
     v = n.v ?? ''
@@ -191,7 +192,7 @@ function renderInline(node: Node, c: InlineCtx): string {
       } else {
         inner.italic = true
       }
-      if ((mark === '*' && c.bold) || (mark === '_' && c.italic)) return flattened(node, c) // Slack cannot nest a style inside itself
+      if ((mark === '*' && c.bold === true) || (mark === '_' && c.italic === true)) return flattened(node, c) // Slack cannot nest a style inside itself
       const { before, after } = spanGap(node)
       const body = childrenInline(node, inner)
       if (mark === '_' && nextSibling(node) === null && isSpanParent(node)) {
@@ -345,7 +346,7 @@ function plainTextWith(node: Node, note: LinkNoter | null): string {
     switch (child.k) {
       case 'Text':
         out += unescapeText(child.v ?? '', false)
-        if (child.hard || child.soft) out += ' '
+        if (child.hard === true || child.soft === true) out += ' '
         break
       case 'String':
         out += child.v ?? ''
@@ -444,7 +445,9 @@ function renderTable(n: Node, maxTable: number): string {
   let cols = aligns.length
   for (const cells of grid) cols = Math.max(cols, cells.length)
   const widths: number[] = new Array(cols).fill(0)
-  for (const cells of grid) cells.forEach((c, i) => (widths[i] = Math.max(widths[i]!, displayWidth(c))))
+  for (const cells of grid) {
+    for (let i = 0; i < cells.length; i++) widths[i] = Math.max(widths[i], displayWidth(cells[i]))
+  }
   if (maxTable > 0 && gridWidth(widths) > maxTable && grid.length > 1) return renderTableRecords(n)
   const alignOf = (i: number): Align => aligns[i] ?? 'none'
   const line = (cells: string[], header: boolean): string => {
@@ -452,7 +455,7 @@ function renderTable(n: Node, maxTable: number): string {
     for (let i = 0; i < cols; i++) {
       let a = alignOf(i)
       if (header && a === 'none') a = 'left'
-      parts.push(pad(cells[i] ?? '', widths[i]!, a))
+      parts.push(pad(cells[i] ?? '', widths[i], a))
     }
     let last = cells.length - 1 // trailing empty cells add no visible text
     while (last >= 0 && cells[last] === '') last--
@@ -481,8 +484,8 @@ function tableFootnotes(notes: TableNote[], grid: string[][]): string {
   notes.forEach((note, i) => {
     let label = note.label
     const first = grid[note.row]?.[0]
-    if ((count.get(label) ?? 0) > 1 && note.col > 0 && note.row < grid.length && grid[note.row]!.length > 0 && first !== '') {
-      label = escape(first!) + ' ' + label
+    if ((count.get(label) ?? 0) > 1 && note.col > 0 && note.row < grid.length && grid[note.row].length > 0 && first !== '') {
+      label = escape(must(first)) + ' ' + label
     }
     out += `\n[${i + 1}] ${slackLink(note.dest, label)}`
   })
@@ -547,7 +550,7 @@ function quoteBlock(body: string): string {
 function renderQuote(n: Node, depth: number, maxTable: number): string {
   const parts: string[] = []
   let pending: string[] = []
-  const flush = () => {
+  const flush = (): void => {
     if (pending.length > 0) {
       parts.push(quoteBlock(pending.join('\n\n')))
       pending = []

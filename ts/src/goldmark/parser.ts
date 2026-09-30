@@ -2,6 +2,7 @@ import { GNode, type DelimiterProcessor, isParagraph, mergeOrAppendTextSegment, 
 import { BlockReader, SourceReader, type TextReader } from './reader.js'
 import { Segment } from './segment.js'
 import { isPunct, isSpace, isBlank, indentWidth, isSpaceRune, isPunctRune, toRune } from './util.js'
+import { must } from '../must.js'
 
 /** Go slice semantics (shared backing array, length, capacity), which goldmark's opened-block bookkeeping depends on. */
 export class GoSlice<T> {
@@ -17,7 +18,7 @@ export class GoSlice<T> {
 
   at(i: number): T {
     if (i < 0 || i >= this.len) throw new Error('index out of range')
-    return this.arr[i]!
+    return this.arr[i]
   }
 
   slice(lo: number, hi: number): GoSlice<T> {
@@ -34,13 +35,13 @@ export class GoSlice<T> {
   append(...items: T[]): GoSlice<T> {
     const newLen = this.len + items.length
     if (newLen <= this.cap) {
-      for (let i = 0; i < items.length; i++) this.arr[this.len + i] = items[i]!
+      for (let i = 0; i < items.length; i++) this.arr[this.len + i] = items[i]
       return new GoSlice(this.arr, newLen, this.cap)
     }
     let newCap = this.cap * 2
     if (newLen > newCap) newCap = newLen
     const arr = this.arr.slice(0, this.len)
-    for (let i = 0; i < items.length; i++) arr[this.len + i] = items[i]!
+    for (let i = 0; i < items.length; i++) arr[this.len + i] = items[i]
     return new GoSlice(arr, newLen, newCap)
   }
 
@@ -147,7 +148,7 @@ export class Context {
       this.delimiters = d
       this.lastDelimiter = d
     } else {
-      const l = this.lastDelimiter!
+      const l = must(this.lastDelimiter)
       this.lastDelimiter = d
       l.nextDelimiter = d
       d.previousDelimiter = l
@@ -166,8 +167,8 @@ export class Context {
     if (this.lastDelimiter !== null) this.lastDelimiter.nextDelimiter = null
     d.nextDelimiter = null
     d.previousDelimiter = null
-    if (d.length !== 0) mergeOrReplaceTextSegment(d.parent!, d, d.segment)
-    else d.parent!.removeChild(d)
+    if (d.length !== 0) mergeOrReplaceTextSegment(must(d.parent), d, d.segment)
+    else must(d.parent).removeChild(d)
   }
 
   clearDelimiters(bottom: GNode | null | undefined): void {
@@ -206,7 +207,7 @@ export function calcConsumption(d: GNode, closer: GNode): number {
 /** ScanDelimiter: reads a run of delimiter characters at the start of line and works out whether it can open or close emphasis. */
 export function scanDelimiter(line: Uint8Array, before: number, minimum: number, processor: DelimiterProcessor): GNode | null {
   const i = 0
-  const c = line[i]!
+  const c = line[i]
   let j = i
   if (!processor.isDelimiter(c)) return null
   for (; j < line.length && c === line[j]; j++);
@@ -266,7 +267,7 @@ export function processDelimiters(bottom: GNode | null | undefined, pc: Context)
     let maybeOpener = false
     let opener: GNode | null
     for (opener = closer.previousDelimiter; opener !== null && opener !== bottom; opener = opener.previousDelimiter) {
-      if (opener.canOpen && opener.processor!.canOpenCloser(opener, closer)) {
+      if (opener.canOpen && must(opener.processor).canOpenCloser(opener, closer)) {
         maybeOpener = true
         consume = calcConsumption(opener, closer)
         if (consume > 0) {
@@ -281,11 +282,11 @@ export function processDelimiters(bottom: GNode | null | undefined, pc: Context)
       closer = next
       continue
     }
-    const op = opener!
+    const op = must(opener)
     consumeCharacters(op, consume)
     consumeCharacters(closer, consume)
-    const node = op.processor!.onMatch(consume)
-    const parent = op.parent!
+    const node = must(op.processor).onMatch(consume)
+    const parent = must(op.parent)
     let child = op.next
     while (child !== null && child !== closer) {
       const next: GNode | null = child.next
@@ -318,7 +319,7 @@ function isBlankLine(lineNum: number, level: number, stats: LineStat[]): boolean
   const l = stats.length
   if (l === 0) return true
   for (let i = l - 1 - level; i >= 0; i--) {
-    const s = stats[i]!
+    const s = stats[i]
     if (s.lineNum === lineNum && s.level <= level) return s.isBlank
     else if (s.lineNum < lineNum) break
   }
@@ -355,7 +356,7 @@ export class Parser {
       if (parser.trigger === null) this.freeBlockParsers.push(parser)
       else for (const tc of parser.trigger) (this.blockParsers[tc] ??= []).push(parser)
     }
-    for (let i = 0; i < 256; i++) if (this.blockParsers[i] !== null) this.blockParsers[i]!.push(...this.freeBlockParsers)
+    for (const list of this.blockParsers) list?.push(...this.freeBlockParsers)
     for (const { parser } of byPriority(config.inlineParsers)) {
       if (parser.closeBlock) this.closeBlockers.push(parser)
       for (const tc of parser.trigger) (this.inlineParsers[tc] ??= []).push(parser)
@@ -386,9 +387,9 @@ export class Parser {
   private closeBlocks(from: number, to: number, reader: TextReader, pc: Context): void {
     let blocks = pc.openedBlocks()
     for (let i = from; i >= to; i--) {
-      const node = blocks.at(i).node!
+      const node = must(blocks.at(i).node)
       if (node.kind === 'Paragraph' && node.parent !== null) this.transformParagraph(node, reader, pc)
-      if (node.parent !== null) blocks.at(i).parser!.close(blocks.at(i).node!, reader, pc) // closes only if node has not been transformed
+      if (node.parent !== null) must(blocks.at(i).parser).close(must(blocks.at(i).node), reader, pc) // closes only if node has not been transformed
     }
     if (from === blocks.len - 1) {
       blocks = blocks.slice(0, to)
@@ -406,7 +407,8 @@ export class Parser {
     let continuable = false
     let lastBlock = pc.lastOpenedBlock()
     if (lastBlock.node !== null) continuable = isParagraph(lastBlock.node)
-    retry: for (;;) {
+    for (;;) {
+      let again = false
       const [line] = reader.peekLine()
       const [w, pos] = indentWidth(line ?? new Uint8Array(0), reader.lineOffset())
       if (w >= (line?.length ?? 0)) {
@@ -418,7 +420,7 @@ export class Parser {
       }
       if (line === null || line[0] === 0x0a) break
       let bps: BlockParser[] | null = this.freeBlockParsers
-      if (pos < line.length) bps = this.blockParsers[line[pos]!] ?? this.freeBlockParsers
+      if (pos < line.length) bps = this.blockParsers[line[pos]] ?? this.freeBlockParsers
       for (const bp of bps) {
         if (continuable && result === noBlocksOpened && !bp.canInterruptParagraph) continue
         if (w > 3 && !bp.canAcceptIndentedLine) continue
@@ -428,17 +430,18 @@ export class Parser {
         if (node !== null) {
           if ((state & State.RequireParagraph) !== 0) {
             if (last === parent.lastChild) {
-              lastBlock.parser!.close(last!, reader, pc)
+              must(lastBlock.parser).close(must(last), reader, pc)
               const blocks = pc.openedBlocks()
               pc.setOpenedBlocks(blocks.slice(0, blocks.len - 1))
-              if (this.transformParagraph(last!, reader, pc)) {
+              if (this.transformParagraph(must(last), reader, pc)) {
                 continuable = false
-                continue retry
+                again = true
+                break
               }
             }
           }
           node.blankPreviousLines = blankLine
-          if (last !== null && last.parent === null) {
+          if (last?.parent === null) {
             const lastPos = pc.openedBlocks().len - 1
             this.closeBlocks(lastPos, lastPos, reader, pc)
           }
@@ -447,15 +450,15 @@ export class Parser {
           pc.setOpenedBlocks(pc.openedBlocks().append({ node, parser: bp }))
           if ((state & State.HasChildren) !== 0) {
             parent = node
-            continue retry // try child block
+            again = true // try child block
           }
-          break // no children, can not open more blocks on this line
+          break // with no children, no more blocks can open on this line
         }
       }
-      break
+      if (!again) break
     }
     if (result === noBlocksOpened && continuable) {
-      const state = lastBlock.parser!.continue(lastBlock.node!, reader, pc)
+      const state = must(lastBlock.parser).continue(must(lastBlock.node), reader, pc)
       if ((state & State.Continue) !== 0) result = paragraphContinuation
     }
     return result
@@ -489,12 +492,12 @@ export class Parser {
           blankLines.push({ lineNum, level: i, isBlank: isBlank(line) })
           // A paragraph's continuation is decided by openBlocks, so it is not processed here.
           if (!isParagraph(be.node)) {
-            const state = be.parser!.continue(be.node!, reader, pc)
+            const state = must(be.parser).continue(must(be.node), reader, pc)
             if ((state & State.Continue) !== 0) {
               // A container block with no children yet may open a new child.
               if ((state & State.HasChildren) !== 0 && i === lastIndex) {
                 const blank = isBlankLine(lineNum - 1, i + 1, blankLines)
-                this.openBlocks(be.node!, blank, reader, pc)
+                this.openBlocks(must(be.node), blank, reader, pc)
                 break
               }
               continue
@@ -502,7 +505,7 @@ export class Parser {
           }
           // The current node may be closed or continued lazily.
           const blank = isBlankLine(lineNum - 1, i, blankLines)
-          const thisParent = i !== 0 ? openedBlocks.at(i - 1).node! : parent
+          const thisParent = i !== 0 ? must(openedBlocks.at(i - 1).node) : parent
           const lastNode = openedBlocks.at(lastIndex).node
           const result = this.openBlocks(thisParent, blank, reader, pc)
           if (result !== paragraphContinuation) {
@@ -527,7 +530,7 @@ export class Parser {
     let escaped = false
     const source = block.source()
     block.reset(parent.lines)
-    outer: for (;;) {
+    for (;;) {
       const [line] = block.peekLine()
       if (line === null) break
       let lineLength = line.length
@@ -555,8 +558,9 @@ export class Parser {
       const [l, startPositionIn] = block.position()
       let startPosition = startPositionIn
       let n = 0
-      for (let i = 0; i < lineLength; i++) {
-        const c = line[i]!
+      let restart = false
+      for (let i = 0; i < lineLength && !restart; i++) {
+        const c = line[i]
         if (c === 0x0a) break
         const spaceChar = isSpace(c) && c !== 0x0d && c !== 0x0a
         const punct = isPunct(c)
@@ -581,7 +585,8 @@ export class Parser {
             }
             if (inlineNode !== null) {
               parent.appendChild(inlineNode)
-              continue outer
+              restart = true
+              continue
             }
           }
         }
@@ -598,6 +603,7 @@ export class Parser {
         escaped = false
         n++
       }
+      if (restart) continue
       if (n !== 0) block.advance(n)
       const [currentL, currentPosition] = block.position()
       if (l !== currentL) continue
@@ -611,7 +617,7 @@ export class Parser {
       block.advanceLine()
     }
     processDelimiters(undefined, pc)
-    for (const ip of this.closeBlockers) ip.closeBlock!(parent, block, pc)
+    for (const ip of this.closeBlockers) ip.closeBlock?.(parent, block, pc)
   }
 }
 

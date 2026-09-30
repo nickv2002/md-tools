@@ -1,3 +1,4 @@
+import { toWellFormed } from './gotext.js'
 import { parseMarkdown } from './parse.js'
 import { renderDocument } from './render.js'
 
@@ -20,7 +21,7 @@ function stripFrontMatter(input: string): string {
 }
 
 /** The parser's input: well-formed text with front matter removed. */
-export const prepare = (input: string): string => stripFrontMatter(input.toWellFormed())
+export const prepare = (input: string): string => stripFrontMatter(toWellFormed(input))
 
 /** Renders Markdown as Slack mrkdwn. Unsupported block syntax becomes readable plain text; front matter and raw HTML are omitted. */
 export function markdownToSlackMrkdwn(input: string, opts: Options = {}): string {

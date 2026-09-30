@@ -2,6 +2,7 @@ import { GNode, type Alignment, type DelimiterProcessor, mergeOrAppendTextSegmen
 import { type ASTTransformer, type InlineParser, type ParagraphTransformer, contextKey, scanDelimiter } from './parser.js'
 import { Segment } from './segment.js'
 import { findEmailIndex, indentWidth, isAlphaNumeric, isBlank, isPunct, isSpace, latin1 } from './util.js'
+import { must } from '../must.js'
 
 // ---------- strikethrough ----------
 
@@ -16,7 +17,7 @@ export const strikethroughParser: InlineParser = {
   parse(_parent, block, pc) {
     const before = block.precedingCharacter()
     const [line, segment] = block.peekLine()
-    const node = scanDelimiter(line!, before, 1, strikethroughProcessor)
+    const node = scanDelimiter(must(line), before, 1, strikethroughProcessor)
     if (node === null || node.originalLength > 2 || before === 0x7e) return null
     node.segment = segment.withStop(segment.start + node.originalLength)
     block.advance(node.originalLength)
@@ -32,10 +33,10 @@ const isTaskSpace = (c: number): boolean => c === 0x20 || (c >= 0x09 && c <= 0x0
 /** The length of a leading [ ], [x] or [X] and the white space after it, or 0 (goldmark's ^\[([\s xX])\]\s* regexp). */
 function taskBoxLength(line: Uint8Array): number {
   if (line.length < 3 || line[0] !== 0x5b || line[2] !== 0x5d) return 0
-  const c = line[1]!
+  const c = line[1]
   if (!(isTaskSpace(c) || c === 0x78 || c === 0x58)) return 0
   let i = 3
-  while (i < line.length && isTaskSpace(line[i]!)) i++
+  while (i < line.length && isTaskSpace(line[i])) i++
   return i
 }
 
@@ -46,9 +47,9 @@ export const taskCheckBoxParser: InlineParser = {
     if (parent.hasChildren()) return null
     if (parent.parent.kind !== 'ListItem') return null
     const [line] = block.peekLine()
-    const length = taskBoxLength(line!)
+    const length = taskBoxLength(must(line))
     if (length === 0) return null
-    const value = line![1]!
+    const value = must(line)[1]
     block.advance(length)
     const n = new GNode('TaskCheckBox')
     n.isChecked = value === 0x78 || value === 0x58
@@ -73,10 +74,10 @@ export const linkifyParser: InlineParser = {
   parse(parent, block, pc) {
     if (pc.isInLinkLabel()) return null
     const [line0, segment] = block.peekLine()
-    let line = line0!
+    let line = must(line0)
     let consumes = 0
     let start = segment.start
-    const c = line[0]!
+    const c = line[0]
     // advance if current position is not a line head.
     if (c === 0x20 || c === 0x2a || c === 0x5f || c === 0x7e || c === 0x28) {
       consumes++
@@ -96,8 +97,8 @@ export const linkifyParser: InlineParser = {
       protocol = new TextEncoder().encode('http')
     }
     if (m !== null && m[0] !== 0) m = null
-    if (m !== null && m[0] === 0) {
-      const lastChar = line[m[1] - 1]!
+    if (m?.[0] === 0) {
+      const lastChar = line[m[1] - 1]
       if (lastChar === 0x2e) {
         m[1]--
       } else if (lastChar === 0x29) {
@@ -110,7 +111,7 @@ export const linkifyParser: InlineParser = {
       } else if (lastChar === 0x3b) {
         let i = m[1] - 2
         for (; i >= m[0]; i--) {
-          if (isAlphaNumeric(line[i]!)) continue
+          if (isAlphaNumeric(line[i])) continue
           break
         }
         if (i !== m[1] - 2) {
@@ -121,18 +122,18 @@ export const linkifyParser: InlineParser = {
     let at = 0
     let emailEnd = 0
     if (m === null) {
-      if (line.length > 0 && isPunct(line[0]!)) return null
+      if (line.length > 0 && isPunct(line[0])) return null
       typ = 'email'
       const stop = findEmailIndex(line)
       if (stop < 0) return null
       at = line.indexOf(0x40)
       emailEnd = stop
       m = [0, stop]
-      if (line.subarray(at, stop - 1).indexOf(0x2e) < 0) return null
-      const lastChar = line[m[1] - 1]!
+      if (!line.subarray(at, stop - 1).includes(0x2e)) return null
+      const lastChar = line[m[1] - 1]
       if (lastChar === 0x2e) m[1]--
       if (m[1] < line.length) {
-        const nextChar = line[m[1]]!
+        const nextChar = line[m[1]]
         if (nextChar === 0x2d || nextChar === 0x5f) return null
       }
     }
@@ -141,7 +142,7 @@ export const linkifyParser: InlineParser = {
     if (consumes !== 0) mergeOrAppendTextSegment(parent, segment.withStop(segment.start + 1))
     let i = m[1] - 1
     for (; i > 0; i--) {
-      const ch = line[i]!
+      const ch = line[i]
       if (ch === 0x3f || ch === 0x21 || ch === 0x2e || ch === 0x2c || ch === 0x3a || ch === 0x2a || ch === 0x5f || ch === 0x7e) continue
       break
     }
@@ -199,8 +200,8 @@ function parseDelimiter(segment: Segment, source: Uint8Array): Alignment[] | nul
   const line = segment.value(source)
   if (!isTableDelim(line)) return null
   let cols = splitBytes(line, 0x7c)
-  if (isBlank(cols[0]!)) cols = cols.slice(1)
-  if (cols.length > 0 && isBlank(cols[cols.length - 1]!)) cols = cols.slice(0, cols.length - 1)
+  if (isBlank(cols[0])) cols = cols.slice(1)
+  if (cols.length > 0 && isBlank(cols[cols.length - 1])) cols = cols.slice(0, cols.length - 1)
   const alignments: Alignment[] = []
   for (const col of cols) {
     const s = latin1(col)
@@ -232,7 +233,7 @@ function parseRow(segmentIn: Segment, alignments: Alignment[], isHeader: boolean
     if (i >= alignments.length) {
       if (!isHeader) return row
     } else {
-      alignment = alignments[i]!
+      alignment = alignments[i]
     }
     let escapedCell: EscapedPipeCell | null = null
     const node = newTableCell()
@@ -284,9 +285,9 @@ export const tableParagraphTransformer: ParagraphTransformer = {
       table.appendChild(th)
       for (let j = i + 1; j < lines.length; j++) table.appendChild(parseRow(lines.at(j), alignments, false, source, pc))
       node.lines.setSliced(0, i - 1)
-      node.parent!.insertAfter(node, table)
+      must(node.parent).insertAfter(node, table)
       if (node.lines.length === 0) {
-        node.parent!.removeChild(node)
+        must(node.parent).removeChild(node)
       } else {
         const last = node.lines.at(i - 2)
         node.lines.set(i - 2, last.withStop(last.stop - 1)) // trim last newline(\n)
@@ -310,7 +311,7 @@ export const tableASTTransformer: ASTTransformer = {
             c = next
             continue
           }
-          const parent = c.parent!
+          const parent = must(c.parent)
           const ts = c.segment
           let cur = c
           for (const w of lst) {

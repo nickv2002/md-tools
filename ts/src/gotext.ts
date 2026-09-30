@@ -70,7 +70,7 @@ function unescapeEntity(m: string): string {
   if (m.charAt(1) === '#') {
     const hex = m.charAt(2) === 'x' || m.charAt(2) === 'X'
     let x = parseInt(m.slice(hex ? 3 : 2, -1), hex ? 16 : 10)
-    if (x >= 0x80 && x <= 0x9f) x = CP1252[x - 0x80]!
+    if (x >= 0x80 && x <= 0x9f) x = CP1252[x - 0x80]
     else if (x === 0 || (x >= 0xd800 && x <= 0xdfff) || x > 0x10ffff) x = 0xfffd
     return String.fromCodePoint(x)
   }
@@ -156,3 +156,9 @@ export function decodeUtf8Lossy(bytes: Uint8Array): string {
   flush(i)
   return out
 }
+
+const REPLACEMENT = String.fromCharCode(0xfffd)
+const LONE_SURROGATE = new RegExp('[\\ud800-\\udbff](?![\\udc00-\\udfff])|(?<![\\ud800-\\udbff])[\\udc00-\\udfff]', 'g')
+
+/** String.prototype.toWellFormed (ES2024): lone surrogates become U+FFFD. */
+export const toWellFormed = (s: string): string => s.replace(LONE_SURROGATE, REPLACEMENT)

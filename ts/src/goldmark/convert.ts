@@ -1,6 +1,7 @@
 import { type GNode } from './ast.js'
 import { type Node, type Kind, node } from '../tree.js'
 import { bytesToString } from './util.js'
+import { must } from '../must.js'
 
 const KINDS = new Set<string>([
   'Document', 'Paragraph', 'TextBlock', 'Heading', 'List', 'ListItem', 'Blockquote', 'FencedCodeBlock', 'CodeBlock', 'ThematicBreak', 'HTMLBlock',
@@ -30,7 +31,7 @@ export function toRenderTree(n: GNode, source: Uint8Array): Node {
       out.dest = n.destination ? bytesToString(n.destination) : ''
       break
     case 'AutoLink': {
-      const value = n.value!.segment.value(source)
+      const value = must(n.value).segment.value(source)
       out.v = n.protocol ? bytesToString(n.protocol) + '://' + bytesToString(value) : bytesToString(value)
       out.email = n.autoLinkType === 'email'
       break

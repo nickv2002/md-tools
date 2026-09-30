@@ -93,7 +93,7 @@ abstract class BaseReader implements TextReader {
       const [line, segment] = this.peekLine()
       if (line === null) return [segment, chars, false]
       for (let i = 0; i < line.length; i++) {
-        if (isSpace(line[i]!)) {
+        if (isSpace(line[i])) {
           chars++
           this.advance(1)
           continue
@@ -123,12 +123,13 @@ abstract class BaseReader implements TextReader {
     let closed = false
     const [orgline, orgpos] = this.position()
     let ret: Segments | null = null
-    outer: for (;;) {
+    for (;;) {
       const [bs, segment] = this.peekLine()
       if (bs === null) break
       let i = 0
-      while (i < bs.length) {
-        const c = bs[i]!
+      let finished = false
+      while (i < bs.length && !finished) {
+        const c = bs[i]
         if (opts.codeSpan && codeSpanOpener !== 0 && c === 0x60) {
           let codeSpanCloser = 0
           for (; i < bs.length; i++) {
@@ -139,7 +140,7 @@ abstract class BaseReader implements TextReader {
             }
           }
           if (codeSpanCloser === codeSpanOpener) codeSpanOpener = 0
-        } else if (codeSpanOpener === 0 && c === 0x5c && i < bs.length - 1 && isPunct(bs[i + 1]!)) {
+        } else if (codeSpanOpener === 0 && c === 0x5c && i < bs.length - 1 && isPunct(bs[i + 1])) {
           i += 2
           continue
         } else if (opts.codeSpan && codeSpanOpener === 0 && c === 0x60) {
@@ -150,7 +151,7 @@ abstract class BaseReader implements TextReader {
               break
             }
           }
-        } else if ((opts.codeSpan && codeSpanOpener === 0) || !opts.codeSpan) {
+        } else if (!opts.codeSpan || codeSpanOpener === 0) {
           if (c === closer) {
             opened--
             if (opened === 0) {
@@ -158,16 +159,16 @@ abstract class BaseReader implements TextReader {
               ret.append(segment.withStop(segment.start + i))
               this.advance(i + 1)
               closed = true
-              break outer
+              finished = true
             }
           } else if (c === opener) {
-            if (!opts.nesting) break outer
-            opened++
+            if (!opts.nesting) finished = true
+            else opened++
           }
         }
-        i++
+        if (!finished) i++
       }
-      if (!opts.newline) break
+      if (finished || !opts.newline) break
       this.advanceLine()
       ret ??= new Segments()
       ret.append(segment)
@@ -198,7 +199,7 @@ export class SourceReader extends BaseReader {
   peek(): number {
     if (this.pos.start >= 0 && this.pos.start < this.src.length) {
       if (this.pos.padding !== 0) return 0x20
-      return this.src[this.pos.start]!
+      return this.src[this.pos.start]
     }
     return EOF
   }
@@ -218,7 +219,7 @@ export class SourceReader extends BaseReader {
   precedingCharacter(): number {
     if (this.pos.start <= 0) return this.pos.padding !== 0 ? 0x20 : 0x0a
     let i = this.pos.start - 1
-    for (; i >= 0; i--) if (isRuneStart(this.src[i]!)) break
+    for (; i >= 0; i--) if (isRuneStart(this.src[i])) break
     return decodeRune(this.src, i)[0]
   }
 
@@ -322,7 +323,7 @@ export class BlockReader extends BaseReader {
       const cur = this.segments.at(line)
       if (i < 0) i = cur.start
       for (let k = 0; k < cur.padding; k++) ret.push(0x20)
-      for (; i < s.stop && i < cur.stop; i++) ret.push(this.src[i]!)
+      for (; i < s.stop && i < cur.stop; i++) ret.push(this.src[i])
       i = -1
       if (cur.stop > s.stop) break
     }
@@ -336,7 +337,7 @@ export class BlockReader extends BaseReader {
     if (this.line === 0 && this.pos.start <= first.start) return 0x0a
     const l = this.src.length
     let i = this.pos.start - 1
-    for (; i < l && i >= 0; i--) if (isRuneStart(this.src[i]!)) break
+    for (; i < l && i >= 0; i--) if (isRuneStart(this.src[i])) break
     if (i < 0 || i >= l) return 0x0a
     return decodeRune(this.src, i)[0]
   }
@@ -344,7 +345,7 @@ export class BlockReader extends BaseReader {
   peek(): number {
     if (this.line < this.segmentsLength && this.pos.start >= 0 && this.pos.start < this.last) {
       if (this.pos.padding !== 0) return 0x20
-      return this.src[this.pos.start]!
+      return this.src[this.pos.start]
     }
     return EOF
   }
@@ -406,7 +407,7 @@ export class BlockReader extends BaseReader {
     const stream = this.stream()
     this.setPosition(oldLine, oldSeg)
     const m = reg.exec(stream)
-    if (!m || m.index !== 0) return false
+    if (m?.index !== 0) return false
     this.advance(m[0].length)
     return true
   }
