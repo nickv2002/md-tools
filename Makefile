@@ -1,4 +1,4 @@
-.PHONY: help build test lint check fuzz ci-status release next-version clean
+.PHONY: help build test lint check ts-check fuzz ci-status release next-version clean
 
 GO_PACKAGES := ./...
 BIN_DIR := bin
@@ -22,6 +22,9 @@ lint: ## gofmt + go vet (same as CI)
 	go vet $(GO_PACKAGES)
 
 check: lint test ## Everything CI runs locally
+
+ts-check: ## Typecheck and test the TypeScript port (needs npm install in ts/)
+	cd ts && npm run typecheck && npm test
 
 # Fuzzing saturates every core by default. Cap both the workers and the Go
 # scheduler, and run at low priority so the machine stays quiet.
