@@ -213,6 +213,20 @@ func edgeRune(n ast.Node, source []byte, last bool) (rune, bool) {
 	return r, true
 }
 
+// trimClosingPunct strips trailing closing punctuation from body without
+// cutting through an entity the converter wrote (&amp; &lt; &gt;).
+func trimClosingPunct(body string) string {
+	trimmed := strings.TrimRight(body, closingPunct)
+	if strings.HasPrefix(body[len(trimmed):], ";") {
+		for _, e := range []string{"&amp", "&lt", "&gt"} {
+			if strings.HasSuffix(trimmed, e) {
+				return trimmed + ";"
+			}
+		}
+	}
+	return trimmed
+}
+
 // closingPunct are the characters moved out of an italic that ends its parent span.
 const closingPunct = ".,;:!?…\"'”’)]"
 
@@ -325,7 +339,7 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 		if mark == "_" && n.NextSibling() == nil && isSpanParent(n) {
 			// Slack mis-pairs a later _ when an italic ends in punctuation right
 			// before the enclosing span closes (*_Note._*), so leave it outside.
-			trimmed := strings.TrimRight(body, closingPunct)
+			trimmed := trimClosingPunct(body)
 			if trimmed != "" && trimmed != body {
 				return wrapMarks(mark, trimmed, before, "") + body[len(trimmed):] + after
 			}

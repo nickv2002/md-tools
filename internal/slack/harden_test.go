@@ -418,6 +418,8 @@ func TestItalicEndingInPunctuationInsideASpan(t *testing.T) {
 		{"top-level italic keeps its punctuation", "_a._ x", "_a._ x\n"},
 		{"italic not last in its span is untouched", "**_a._ b**", "*_a._ b*\n"},
 		{"all-punctuation italic is untouched", "**_..._**", "*_..._*\n"},
+		{"an entity at the end is never split", "**!*&***", "*!_&amp;_*\n"},
+		{"entity then punctuation moves only the punctuation", "**_a &amp;._**", "*_a &amp;_.*\n"},
 	})
 }
 
