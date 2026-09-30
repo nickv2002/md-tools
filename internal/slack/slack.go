@@ -227,6 +227,26 @@ func emphasisGap(n ast.Node, source []byte) (before, after string) {
 	return before, after
 }
 
+// wrapMarks surrounds inner with mark, adjusting for what Slack will not
+// format: nothing at all when inner is blank, and never a span that opens or
+// closes on whitespace or crosses a line break, so edge whitespace moves
+// outside the markers and each line gets its own pair.
+func wrapMarks(mark, inner, before, after string) string {
+	core := strings.TrimSpace(inner)
+	if core == "" {
+		return inner
+	}
+	lead := inner[:strings.Index(inner, core)]
+	trail := inner[len(lead)+len(core):]
+	lines := strings.Split(core, "\n")
+	for i, line := range lines {
+		if line = strings.TrimSpace(line); line != "" {
+			lines[i] = mark + line + mark
+		}
+	}
+	return lead + before + strings.Join(lines, "\n") + after + trail
+}
+
 // inlineCtx tracks enclosing markup while rendering inline nodes.
 type inlineCtx struct {
 	bold bool // inside a heading, already rendered bold
@@ -266,12 +286,12 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 			mark = "*"
 		}
 		before, after := emphasisGap(n, source)
-		return before + mark + childrenInline(n, source, c) + mark + after
+		return wrapMarks(mark, childrenInline(n, source, c), before, after)
 	case *extast.Strikethrough:
 		if c.link {
 			return childrenInline(n, source, c)
 		}
-		return "~" + childrenInline(n, source, c) + "~"
+		return wrapMarks("~", childrenInline(n, source, c), "", "")
 	case *ast.CodeSpan:
 		var b strings.Builder
 		for child := n.FirstChild(); child != nil; child = child.NextSibling() {
