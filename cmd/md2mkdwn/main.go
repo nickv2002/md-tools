@@ -22,6 +22,7 @@ func runWithIO(args []string, stdin *os.File, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("md2mkdwn", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	version := flags.Bool("version", false, "print version")
+	maxTable := flags.Int("max-table-width", slack.DefaultMaxTableWidth, "widest table grid in columns before a table becomes one record per row (0 keeps every table a grid)")
 	flags.Usage = func() {
 		fmt.Fprintln(flags.Output(), "Usage: md2mkdwn [FILE]")
 		fmt.Fprintln(flags.Output(), "Convert Markdown from FILE or stdin to Slack mrkdwn on stdout.")
@@ -36,6 +37,10 @@ func runWithIO(args []string, stdin *os.File, stdout, stderr io.Writer) int {
 	if *version {
 		fmt.Fprintln(stdout, "md2mkdwn", cli.Version)
 		return 0
+	}
+	if *maxTable < 0 {
+		fmt.Fprintln(stderr, "md2mkdwn: --max-table-width must not be negative")
+		return 2
 	}
 	if flags.NArg() > 1 {
 		flags.Usage()
@@ -73,7 +78,7 @@ func runWithIO(args []string, stdin *os.File, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "md2mkdwn: invalid UTF-8 input")
 		return 1
 	}
-	if _, err := io.WriteString(stdout, slack.Convert(input)); err != nil {
+	if _, err := io.WriteString(stdout, slack.ConvertWith(input, slack.Options{MaxTableWidth: *maxTable})); err != nil {
 		fmt.Fprintln(stderr, "md2mkdwn:", err)
 		return 1
 	}

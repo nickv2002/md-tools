@@ -206,6 +206,9 @@ func TestFlagAndArgumentCombinations(t *testing.T) {
 		{"two files", []string{file, file}, "", 2, "", "Usage: md2mkdwn [FILE]"},
 		{"dash and file", []string{"-", file}, "", 2, "", "Usage: md2mkdwn [FILE]"},
 		{"file then flag is a second argument", []string{file, "--version"}, "", 2, "", "Usage: md2mkdwn [FILE]"},
+		{"table width flag accepted", []string{"--max-table-width", "10", file}, "", 0, "*A*\n", ""},
+		{"table width flag rejects negative", []string{"--max-table-width=-1", file}, "", 2, "", "must not be negative"},
+		{"table width flag rejects text", []string{"--max-table-width=wide", file}, "", 2, "", "invalid value"},
 		{"double dash then file", []string{"--", file}, "", 0, "*A*\n", ""},
 		{"double dash allows dash-prefixed name", []string{"--", dashName}, "", 0, "*D*\n", ""},
 		{"double dash then dash reads stdin", []string{"--", "-"}, "# S\n", 0, "*S*\n", ""},
@@ -226,5 +229,25 @@ func TestFlagAndArgumentCombinations(t *testing.T) {
 				t.Fatalf("usage errors must not write stdout: %q", stdout.String())
 			}
 		})
+	}
+}
+
+func TestMaxTableWidthFlagSwitchesWideTables(t *testing.T) {
+	doc := "| Name | Detail |\n|---|---|\n| alpha | a fairly long description here |\n"
+	run := func(args ...string) string {
+		var stdout, stderr bytes.Buffer
+		if got := runWithIO(append(args, "-"), pipeOf(t, doc), &stdout, &stderr); got != 0 {
+			t.Fatalf("exit %d, stderr %q", got, stderr.String())
+		}
+		return stdout.String()
+	}
+	if got := run(); !strings.HasPrefix(got, "```\n") {
+		t.Fatalf("default keeps a narrow table as a grid: %q", got)
+	}
+	if got := run("--max-table-width", "10"); got != "*alpha*\nDetail: a fairly long description here\n" {
+		t.Fatalf("narrow limit should produce records: %q", got)
+	}
+	if got := run("--max-table-width=0"); !strings.HasPrefix(got, "```\n") {
+		t.Fatalf("0 disables the fallback: %q", got)
 	}
 }

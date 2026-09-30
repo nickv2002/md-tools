@@ -20,9 +20,28 @@ var parser = goldmark.New(goldmark.WithExtensions(extension.GFM))
 // Convert renders Markdown as Slack mrkdwn. Unsupported block syntax is
 // rendered as readable plain text; front matter and raw HTML are omitted.
 func Convert(input []byte) string {
+	return ConvertWith(input, Options{MaxTableWidth: DefaultMaxTableWidth})
+}
+
+// DefaultMaxTableWidth is the widest table, in monospace cells, that Convert
+// keeps as an aligned grid. Slack wraps code-block lines at the window width
+// (about 80 cells in a narrow window, fewer on phones), which shreds a wider
+// grid, so wider tables become one record per row instead.
+const DefaultMaxTableWidth = 100
+
+// Options tunes Convert.
+type Options struct {
+	// MaxTableWidth is the widest aligned table grid to emit; a table with a
+	// body that would be wider is rendered as one record per row. Zero keeps
+	// every table as a grid.
+	MaxTableWidth int
+}
+
+// ConvertWith is Convert with explicit options.
+func ConvertWith(input []byte, opts Options) string {
 	source := stripFrontMatter([]byte(strings.ToValidUTF8(string(input), "\ufffd")))
 	root := parser.Parser().Parse(text.NewReader(source))
-	return strings.TrimSpace(renderChildren(root, source, 0)) + "\n"
+	return strings.TrimSpace(renderChildren(root, source, 0, opts.MaxTableWidth)) + "\n"
 }
 
 func stripFrontMatter(input []byte) []byte {
@@ -306,10 +325,10 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 	}
 }
 
-func renderChildren(node ast.Node, source []byte, depth int) string {
+func renderChildren(node ast.Node, source []byte, depth, maxTable int) string {
 	var blocks []string
 	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
-		if block := strings.TrimSpace(renderBlock(child, source, depth)); block != "" {
+		if block := strings.TrimSpace(renderBlock(child, source, depth, maxTable)); block != "" {
 			blocks = append(blocks, block)
 		}
 	}
@@ -330,7 +349,7 @@ func isParagraph(n ast.Node) bool {
 	return ok
 }
 
-func renderList(n *ast.List, source []byte, depth int) string {
+func renderList(n *ast.List, source []byte, depth, maxTable int) string {
 	var lines []string
 	ordinal := n.Start
 	for item := n.FirstChild(); item != nil; item = item.NextSibling() {
@@ -339,12 +358,12 @@ func renderList(n *ast.List, source []byte, depth int) string {
 			var part string
 			switch child.(type) {
 			case *ast.List:
-				part = "\n" + renderBlock(child, source, depth+1)
+				part = "\n" + renderBlock(child, source, depth+1, maxTable)
 			case *ast.FencedCodeBlock, *ast.CodeBlock, *extast.Table, *ast.Blockquote:
 				// A fence or quote marker only renders when it starts its own line.
-				part = "\n" + renderBlock(child, source, depth+1)
+				part = "\n" + renderBlock(child, source, depth+1, maxTable)
 			default:
-				part = strings.TrimSpace(renderBlock(child, source, depth+1))
+				part = strings.TrimSpace(renderBlock(child, source, depth+1, maxTable))
 			}
 			if strings.TrimSpace(part) == "" {
 				continue
@@ -530,7 +549,7 @@ func pad(s string, width int, align extast.Alignment) string {
 // row is honored and a rule separates the header from the body. Only ASCII
 // box characters are used: Slack draws Unicode box-drawing glyphs from a
 // fallback font whose lines do not meet.
-func renderTable(n *extast.Table, source []byte) string {
+func renderTable(n *extast.Table, source []byte, maxTable int) string {
 	var grid [][]string
 	for row := n.FirstChild(); row != nil; row = row.NextSibling() {
 		var cells []string
@@ -548,6 +567,9 @@ func renderTable(n *extast.Table, source []byte) string {
 		for i, c := range cells {
 			widths[i] = max(widths[i], displayWidth(c))
 		}
+	}
+	if width := gridWidth(widths); maxTable > 0 && width > maxTable && len(grid) > 1 {
+		return renderTableRecords(n, source)
 	}
 	align := func(i int) extast.Alignment {
 		if i < len(n.Alignments) {
@@ -591,7 +613,65 @@ func renderTable(n *extast.Table, source []byte) string {
 	return "```\n" + fenceSafe(strings.Join(out, "\n")) + "\n```"
 }
 
-func renderBlock(node ast.Node, source []byte, depth int) string {
+// gridWidth is the display width of a table grid with the given column widths.
+func gridWidth(widths []int) int {
+	total := 3 * max(len(widths)-1, 0) // " | " between columns
+	for _, w := range widths {
+		total += w
+	}
+	return total
+}
+
+// renderTableRecords renders a table too wide for a code block as one record
+// per body row: the first cell in bold, then "Header: value" pairs. Unlike the
+// grid it stays mrkdwn, so links and emphasis in cells keep working.
+func renderTableRecords(n *extast.Table, source []byte) string {
+	inline := func(node ast.Node, c inlineCtx) string {
+		return strings.Join(strings.Fields(childrenInline(node, source, c)), " ")
+	}
+	var headers []string
+	var records []string
+	for row := n.FirstChild(); row != nil; row = row.NextSibling() {
+		if _, isHeader := row.(*extast.TableHeader); isHeader {
+			for cell := row.FirstChild(); cell != nil; cell = cell.NextSibling() {
+				headers = append(headers, inline(cell, inlineCtx{bold: true, link: true}))
+			}
+			continue
+		}
+		var title string
+		var pairs []string
+		i := 0
+		for cell := row.FirstChild(); cell != nil; cell, i = cell.NextSibling(), i+1 {
+			if i == 0 {
+				if t := inline(cell, inlineCtx{bold: true}); t != "" {
+					title = "*" + t + "*"
+				}
+				continue
+			}
+			value := inline(cell, inlineCtx{})
+			if value == "" {
+				continue
+			}
+			if i < len(headers) && headers[i] != "" {
+				value = headers[i] + ": " + value
+			}
+			pairs = append(pairs, value)
+		}
+		record := strings.Join(pairs, " · ")
+		switch {
+		case title != "" && record != "":
+			record = title + "\n" + record
+		case title != "":
+			record = title
+		}
+		if record != "" {
+			records = append(records, record)
+		}
+	}
+	return strings.Join(records, "\n\n")
+}
+
+func renderBlock(node ast.Node, source []byte, depth, maxTable int) string {
 	switch n := node.(type) {
 	case *ast.Paragraph, *ast.TextBlock:
 		return childrenInline(node, source, inlineCtx{})
@@ -602,9 +682,9 @@ func renderBlock(node ast.Node, source []byte, depth int) string {
 		}
 		return "*" + title + "*"
 	case *ast.List:
-		return renderList(n, source, depth)
+		return renderList(n, source, depth, maxTable)
 	case *ast.Blockquote:
-		body := renderChildren(n, source, depth)
+		body := renderChildren(n, source, depth, maxTable)
 		if body == "" {
 			return ""
 		}
@@ -618,10 +698,10 @@ func renderBlock(node ast.Node, source []byte, depth int) string {
 	case *ast.ThematicBreak:
 		return "---"
 	case *extast.Table:
-		return renderTable(n, source)
+		return renderTable(n, source, maxTable)
 	case *ast.HTMLBlock:
 		return ""
 	default:
-		return renderChildren(node, source, depth)
+		return renderChildren(node, source, depth, maxTable)
 	}
 }

@@ -288,3 +288,39 @@ func TestEmphasisTouchingWordsGetsHairSpace(t *testing.T) {
 		{"link neighbour needs no gap", "[l](https://x.io)**b**", "<https://x.io|l>*b*\n"},
 	})
 }
+
+func TestWideTablesBecomeRecords(t *testing.T) {
+	wide := "| Service | Owner | Notes |\n|---|---|---|\n| **api** | [team](https://x.io) | canary at 10% |\n| db |  | rolling < back |\n"
+	tests := []struct {
+		name string
+		max  int
+		in   string
+		want string
+	}{
+		{"records keep inline markup and skip empty cells", 20, wide, "*api*\nOwner: <https://x.io|team> · Notes: canary at 10%\n\n*db*\nNotes: rolling &lt; back\n"},
+		{"limit not exceeded keeps the grid", 60, "| A | B |\n|---|---|\n| x | y |\n", "```\nA | B\n--+--\nx | y\n```\n"},
+		{"zero limit never falls back", 0, wide, Convert([]byte(wide))},
+		{"header only stays a grid", 5, "| Service | Owner |\n|---|---|\n", "```\nService | Owner\n--------+------\n```\n"},
+		{"empty title cell still lists its values", 3, "|  | B |\n|---|---|\n|  | x |\n| y | |\n", "B: x\n\n*y*\n"},
+		{"header markup is stripped", 5, "| A | **Bold** _H_ |\n|---|---|\n| r | v |\n", "*r*\nBold H: v\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ConvertWith([]byte(tt.in), Options{MaxTableWidth: tt.max}); got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDefaultTableWidthThreshold(t *testing.T) {
+	cell := func(n int) string { return strings.Repeat("x", n) }
+	grid := func(n int) string { return "| A | B |\n|---|---|\n| " + cell(n) + " | y |\n" }
+	// One 3-cell separator plus column A (n) and column B (1): width = n + 4.
+	if got := Convert([]byte(grid(DefaultMaxTableWidth - 4))); !strings.HasPrefix(got, "```") {
+		t.Errorf("width exactly at the limit should stay a grid: %q", got)
+	}
+	if got := Convert([]byte(grid(DefaultMaxTableWidth - 3))); strings.HasPrefix(got, "```") {
+		t.Errorf("width one over the limit should become records: %q", got)
+	}
+}
