@@ -270,3 +270,21 @@ func TestTableCellFlatteningKinds(t *testing.T) {
 		t.Errorf("markup leaked into table:\n%s", got)
 	}
 }
+
+func TestEmphasisTouchingWordsGetsHairSpace(t *testing.T) {
+	const h = " "
+	runCases(t, []struct{ name, input, want string }{
+		{"bold inside a word", "foo**bar**baz", "foo" + h + "*bar*" + h + "baz\n"},
+		{"cjk bold", "这是**重点**文字", "这是" + h + "*重点*" + h + "文字\n"},
+		{"italic after a letter only", "x*y* z", "x" + h + "_y_ z\n"},
+		{"italic before a letter only", "a *y*z", "a _y_" + h + "z\n"},
+		{"digits count as word characters", "1**2**3", "1" + h + "*2*" + h + "3\n"},
+		{"spaces need no gap", "a **b** c", "a *b* c\n"},
+		{"punctuation needs no gap", "(**b**) \"**c**\" **d**.", "(*b*) \"*c*\" *d*.\n"},
+		{"line start and end need no gap", "**b**", "*b*\n"},
+		{"soft line break is a boundary", "a\n**b**\nc", "a *b* c\n"},
+		{"strikethrough needs no gap", "a~~b~~c", "a~b~c\n"},
+		{"adjacent emphasis needs no gap", "**a**_b_", "*a*_b_\n"},
+		{"link neighbour needs no gap", "[l](https://x.io)**b**", "<https://x.io|l>*b*\n"},
+	})
+}

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -156,6 +157,57 @@ func fenceSafe(s string) string {
 	return strings.ReplaceAll(s, "```", "``"+zeroWidthSpace+"`")
 }
 
+// hairSpace is a near-invisible space Slack accepts as a word boundary.
+// Slack only opens *bold* or _italic_ after whitespace or punctuation, so
+// emphasis that touches a letter (foo**bar**, 这是**重点**) would print its
+// markers literally; a zero-width space or word joiner does not help, but
+// U+200A does (verified in real Slack).
+const hairSpace = "\u200a"
+
+func touchesWord(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r) }
+
+// edgeRune returns the first or last rune a sibling text node contributes,
+// or false when the sibling is not plain text or ends in a line break.
+func edgeRune(n ast.Node, source []byte, last bool) (rune, bool) {
+	var v string
+	switch t := n.(type) {
+	case *ast.Text:
+		if last && (t.SoftLineBreak() || t.HardLineBreak()) {
+			return 0, false
+		}
+		v = string(t.Segment.Value(source))
+	case *ast.String:
+		v = string(t.Value)
+	default:
+		return 0, false
+	}
+	if v == "" {
+		return 0, false
+	}
+	if last {
+		r, _ := utf8.DecodeLastRuneInString(v)
+		return r, true
+	}
+	r, _ := utf8.DecodeRuneInString(v)
+	return r, true
+}
+
+// emphasisGap returns the hair spaces needed outside an emphasis span whose
+// neighbours are word characters.
+func emphasisGap(n ast.Node, source []byte) (before, after string) {
+	if prev := n.PreviousSibling(); prev != nil {
+		if r, ok := edgeRune(prev, source, true); ok && touchesWord(r) {
+			before = hairSpace
+		}
+	}
+	if next := n.NextSibling(); next != nil {
+		if r, ok := edgeRune(next, source, false); ok && touchesWord(r) {
+			after = hairSpace
+		}
+	}
+	return before, after
+}
+
 // inlineCtx tracks enclosing markup while rendering inline nodes.
 type inlineCtx struct {
 	bold bool // inside a heading, already rendered bold
@@ -194,7 +246,8 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 			}
 			mark = "*"
 		}
-		return mark + childrenInline(n, source, c) + mark
+		before, after := emphasisGap(n, source)
+		return before + mark + childrenInline(n, source, c) + mark + after
 	case *extast.Strikethrough:
 		if c.link {
 			return childrenInline(n, source, c)
