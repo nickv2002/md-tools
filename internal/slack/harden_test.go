@@ -211,7 +211,14 @@ var linkStart = regexp.MustCompile(`(?i)^(?:https?|mailto|tel|ftp):[^\s|>]+[|>]`
 
 func assertWellFormed(t testing.TB, in string) {
 	t.Helper()
-	got := Convert([]byte(in))
+	assertWellFormedWith(t, in, Convert)
+	// A tiny limit sends every table through the record layout.
+	assertWellFormedWith(t, in, func(b []byte) string { return ConvertWith(b, Options{MaxTableWidth: 3}) })
+}
+
+func assertWellFormedWith(t testing.TB, in string, convert func([]byte) string) {
+	t.Helper()
+	got := convert([]byte(in))
 	if !utf8.ValidString(got) {
 		t.Fatalf("invalid UTF-8 output for %q: %q", in, got)
 	}
@@ -232,7 +239,7 @@ func assertWellFormed(t testing.TB, in string) {
 			t.Fatalf("unsafe < in output for %q: %q", in, got)
 		}
 	}
-	if again := Convert([]byte(in)); again != got {
+	if again := convert([]byte(in)); again != got {
 		t.Fatalf("non-deterministic output for %q", in)
 	}
 }
@@ -245,6 +252,7 @@ func FuzzConvert(f *testing.F) {
 		"---\ntitle: x\n---\n<div>x</div>\n\n- [ ] t\n- [x] d",
 		"| 👨‍👩‍👧 | 🇺🇸 | é |\n|---|---|---|\n| ❤️ | 👍🏽 | 日本 |",
 		"````md\n```js\nx\n```\n````", "\xff\x00\r\n\r\r",
+		"| Service | Owner | Notes |\n|---|---|---|\n| **api** | [t](https://x.io) | a |\n| db | | b\u200a*c* |",
 	}
 	for _, s := range seeds {
 		f.Add(s)
