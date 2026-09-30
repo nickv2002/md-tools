@@ -253,3 +253,20 @@ func FuzzConvert(f *testing.F) {
 		assertWellFormed(t, in)
 	})
 }
+
+func TestTableCellFlatteningKinds(t *testing.T) {
+	in := "| A |\n|---|\n" +
+		"| <https://x.io/a> <a@b.co> www.x.io |\n" +
+		"| [](https://x.io) [https://y.io](https://y.io) |\n" +
+		"| **_nested_ `code <b>`** ![](i.png) |\n" +
+		"| a<br>b |\n"
+	got := Convert([]byte(in))
+	for _, want := range []string{"https://x.io/a a@b.co http://www.x.io", "https://x.io https://y.io", "nested code <b>", "a b"} {
+		if !strings.Contains(strings.NewReplacer("&lt;", "<", "&gt;", ">").Replace(got), want) {
+			t.Errorf("missing %q in\n%s", want, got)
+		}
+	}
+	if strings.ContainsAny(got, "*_~") {
+		t.Errorf("markup leaked into table:\n%s", got)
+	}
+}
