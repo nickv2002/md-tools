@@ -299,6 +299,16 @@ func spanGap(n ast.Node, source []byte) (before, after string) {
 	return before, after
 }
 
+// flattened renders a span whose style is already active around it: no markers,
+// but a following span still needs the gap this one would have provided.
+func flattened(n ast.Node, source []byte, c inlineCtx) string {
+	out := childrenInline(n, source, c)
+	if next := n.NextSibling(); next != nil && isSpan(next) {
+		out += hairSpace
+	}
+	return out
+}
+
 // wrapMarks surrounds inner with mark, adjusting for what Slack will not
 // format: nothing at all when inner is blank, and never a span that opens or
 // closes on whitespace or crosses a line break, so edge whitespace moves
@@ -361,7 +371,7 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 			inner.italic = true
 		}
 		if (mark == "*" && c.bold) || (mark == "_" && c.italic) { // Slack cannot nest a style inside itself
-			return childrenInline(n, source, c)
+			return flattened(n, source, c)
 		}
 		before, after := spanGap(n, source)
 		body := childrenInline(n, source, inner)
@@ -379,7 +389,7 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 			return childrenInline(n, source, c)
 		}
 		if c.strike {
-			return childrenInline(n, source, c)
+			return flattened(n, source, c)
 		}
 		c.strike = true
 		before, after := spanGap(n, source)
