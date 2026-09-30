@@ -1,8 +1,10 @@
-.PHONY: help build test lint check ci-status release next-version clean
+.PHONY: help build test lint check fuzz ci-status release next-version clean
 
 GO_PACKAGES := ./...
 BIN_DIR := bin
 VERSION ?=
+FUZZTIME ?= 10s
+FUZZ_WORKERS ?= 2
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -20,6 +22,11 @@ lint: ## gofmt + go vet (same as CI)
 	go vet $(GO_PACKAGES)
 
 check: lint test ## Everything CI runs locally
+
+# Fuzzing saturates every core by default. Cap both the workers and the Go
+# scheduler, and run at low priority so the machine stays quiet.
+fuzz: ## Fuzz the converter on 2 cores, low priority: make fuzz FUZZTIME=30s
+	GOMAXPROCS=$(FUZZ_WORKERS) nice -n 19 go test ./internal/slack -run '^$$' -fuzz FuzzConvert -fuzztime $(FUZZTIME) -parallel $(FUZZ_WORKERS)
 
 ci-status: ## Show CI runs for HEAD (release only after this is green)
 	gh run list --branch main --commit "$$(git rev-parse HEAD)" --limit 5

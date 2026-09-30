@@ -15,6 +15,7 @@ Go module `github.com/nickv2002/md-tools` with two CLIs: `mdunwrap` (unwrap hard
 ```bash
 make check      # gofmt + go vet + go test, identical to CI
 make build      # binaries into ./bin
+make fuzz       # fuzz the converter, capped at 2 cores and low priority (FUZZTIME=10s, FUZZ_WORKERS=2)
 make help
 ```
 
