@@ -821,6 +821,48 @@ func renderTableRecords(n *extast.Table, source []byte) string {
 	return strings.Join(records, "\n\n")
 }
 
+// quoteBlock prefixes body as one Slack quote. Slack drops the "> " only on the
+// first line and keeps the space on later ones, so those lines use a bare ">".
+func quoteBlock(body string) string {
+	lines := strings.Split(body, "\n")
+	for i, l := range lines {
+		prefix := ">"
+		if i == 0 {
+			prefix = "> "
+		}
+		lines[i] = strings.TrimRight(prefix+l, " ")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// renderQuote renders a Markdown blockquote. A Slack quote cannot hold a code
+// block (the ">" characters would leak into it), so fences and tables end the
+// quote, stand on their own, and a new quote continues after them.
+func renderQuote(n *ast.Blockquote, source []byte, depth, maxTable int) string {
+	var parts, pending []string
+	flush := func() {
+		if len(pending) > 0 {
+			parts = append(parts, quoteBlock(strings.Join(pending, "\n\n")))
+			pending = nil
+		}
+	}
+	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
+		block := strings.TrimSpace(renderBlock(child, source, depth, maxTable))
+		if block == "" {
+			continue
+		}
+		switch child.(type) {
+		case *ast.FencedCodeBlock, *ast.CodeBlock, *extast.Table:
+			flush()
+			parts = append(parts, block)
+		default:
+			pending = append(pending, block)
+		}
+	}
+	flush()
+	return strings.Join(parts, "\n")
+}
+
 func renderBlock(node ast.Node, source []byte, depth, maxTable int) string {
 	switch n := node.(type) {
 	case *ast.Paragraph, *ast.TextBlock:
@@ -834,15 +876,7 @@ func renderBlock(node ast.Node, source []byte, depth, maxTable int) string {
 	case *ast.List:
 		return renderList(n, source, depth, maxTable)
 	case *ast.Blockquote:
-		body := renderChildren(n, source, depth, maxTable)
-		if body == "" {
-			return ""
-		}
-		lines := strings.Split(body, "\n")
-		for i, l := range lines {
-			lines[i] = strings.TrimRight("> "+l, " ")
-		}
-		return strings.Join(lines, "\n")
+		return renderQuote(n, source, depth, maxTable)
 	case *ast.FencedCodeBlock, *ast.CodeBlock:
 		return "```\n" + codeLines(node, source) + "\n```"
 	case *ast.ThematicBreak:

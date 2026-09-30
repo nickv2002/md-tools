@@ -52,7 +52,7 @@ func TestConvertSlackRegressions(t *testing.T) {
 		{"slack specials in fence are escaped", "```\n<https://x.io|a> <!channel> a && b\n```", "```\n&lt;https://x.io|a&gt; &lt;!channel&gt; a &amp;&amp; b\n```\n"},
 		{"links in table cells flatten to text", "| A |\n|---|\n| `https://x.io` and [l](https://x.io) |", "```\nA\n----------------------\nhttps://x.io and l [1]\n```\n[1] <https://x.io|l>\n"},
 		{"nested fence cannot close block", "````markdown\n# Doc\n\n```mermaid\nA --> B\n```\n````", "```\n# Doc\n\n``" + z + "`mermaid\nA --&gt; B\n``" + z + "`\n```\n"},
-		{"blockquote has no trailing spaces", "> **Note**\n> - one\n> - two", "> *Note*\n>\n> - one\n> - two\n"},
+		{"blockquote has no trailing spaces", "> **Note**\n> - one\n> - two", "> *Note*\n>\n>- one\n>- two\n"},
 		{"br becomes newline", "a<br>b", "a\nb\n"},
 		{"task list", "- [ ] todo\n- [x] done", "- ☐ todo\n- ☑ done\n"},
 		{"mention and channel injection neutralized", "<!channel> <@U123> @here", "&lt;!channel&gt; &lt;@U123&gt; @here\n"},
