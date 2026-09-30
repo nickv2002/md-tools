@@ -325,6 +325,41 @@ func TestSlackRawProbe(t *testing.T) {
 	}
 }
 
+// TestSlackBlocksProbe posts SLACK_PARITY_RAW mrkdwn strings verbatim and logs
+// the compact block tree Slack parsed (lists, quotes, code blocks included).
+func TestSlackBlocksProbe(t *testing.T) {
+	raw := os.Getenv("SLACK_PARITY_RAW")
+	token, user := os.Getenv("SLACK_BOT_TOKEN"), os.Getenv("SLACK_TEST_USER")
+	if raw == "" || token == "" || user == "" {
+		t.Skip("set SLACK_PARITY_RAW, SLACK_BOT_TOKEN and SLACK_TEST_USER")
+	}
+	client := &slackClient{token: token, user: user}
+	for _, m := range strings.Split(raw, "\n@@\n") {
+		data, err := client.call("chat.postMessage", map[string]any{"channel": user, "text": m, "mrkdwn": true, "unfurl_links": false})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var r struct {
+			OK      bool   `json:"ok"`
+			Error   string `json:"error"`
+			TS      string `json:"ts"`
+			Channel string `json:"channel"`
+			Message struct {
+				Blocks json.RawMessage `json:"blocks"`
+			} `json:"message"`
+		}
+		if err := json.Unmarshal(data, &r); err != nil || !r.OK {
+			t.Fatalf("chat.postMessage: %s %v", r.Error, err)
+		}
+		client.call("chat.delete", map[string]any{"channel": r.Channel, "ts": r.TS})
+		var buf bytes.Buffer
+		json.Compact(&buf, r.Message.Blocks)
+		out := strings.NewReplacer(`"type":"`, `"t":"`, `"block_id":"`, `"id":"`).Replace(buf.String())
+		t.Logf("BLOCKS %q => %s", m, out)
+		time.Sleep(1100 * time.Millisecond)
+	}
+}
+
 func TestSlackParity(t *testing.T) {
 	token := os.Getenv("SLACK_BOT_TOKEN")
 	user := os.Getenv("SLACK_TEST_USER")
