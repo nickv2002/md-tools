@@ -23,7 +23,7 @@ func TestLinkSafety(t *testing.T) {
 		{"pipe in label falls back to label (url)", "[a|b](https://x.io)", "a|b (<https://x.io>)\n"},
 		{"angle brackets and ampersand in label", "[a < b > &c](https://x.io)", "<https://x.io|a &lt; b &gt; &amp;c>\n"},
 		{"channel mention in label is escaped", "[<!channel>](https://x.io)", "<https://x.io|&lt;!channel&gt;>\n"},
-		{"mrkdwn markers in label lose emphasis", "[*a* `b` _c_ ~d~](https://x.io)", "<https://x.io|a b c d>\n"},
+		{"markup in a label is kept, Slack styles it", "[*a* `b` _c_ ~d~](https://x.io)", "<https://x.io|_a_ `b` _c_ ~d~>\n"},
 		{"escaped markers in label are neutralized", "[\\*a\\*](https://x.io)", "<https://x.io|∗a∗>\n"},
 		{"label newline collapses", "[a  \nb](https://x.io)", "<https://x.io|a b>\n"},
 		{"empty link destination keeps label", "[x]()", "x\n"},
@@ -299,7 +299,7 @@ func TestTableLinksBecomeFootnotes(t *testing.T) {
 			"```\nS\n-------\napi [1]\ndb [2]\n```\n[1] <https://x.io/a|api>\n[2] <https://x.io/b|db>\n"},
 		{"unlinkable targets stay label (url) with no footnote", "| S |\n|---|\n| [rel](/docs/a.md) |", "```\nS\n----------------\nrel (/docs/a.md)\n```\n"},
 		{"a table without links has no footnotes", "| S |\n|---|\n| a |", "```\nS\n-\na\n```\n"},
-		{"markup in a footnote label is neutralized", "| S | L |\n|---|---|\n| a | [**b**\\*](https://x.io) |", "```\nS | L\n--+-------\na | b* [1]\n```\n[1] <https://x.io|b∗>\n"},
+		{"markup in a footnote label is kept, escapes are neutralized", "| S | L |\n|---|---|\n| a | [**b**\\*](https://x.io) |", "```\nS | L\n--+-------\na | b* [1]\n```\n[1] <https://x.io|*b*∗>\n"},
 	})
 }
 
@@ -408,7 +408,10 @@ func TestInlineCodeEdgeCases(t *testing.T) {
 		{"backtick inside a double-tick span", "`` a`b ``", "`aˋb`\n"},
 		{"code inside emphasis and strike", "**`x`** *`y`* ~~`z`~~", "*`x`* _`y`_ ~`z`~\n"},
 		{"code touching a word gets a gap on both sides", "日本`x`y", "日本" + h + "`x`" + h + "y\n"},
-		{"code in a link label loses its ticks", "[`w`](https://e.com)", "<https://e.com|w>\n"},
+		{"code in a link label keeps its ticks", "[`w`](https://e.com)", "<https://e.com|`w`>\n"},
+		{"link spanning backticks", "[my `cool` link](https://foo.com)", "<https://foo.com|my `cool` link>\n"},
+		{"label with bold and code", "[**bold** and `code`](https://foo.com)", "<https://foo.com|*bold* and `code`>\n"},
+		{"outer style is not repeated inside the label", "**[**a** b](https://foo.com)**", "*<https://foo.com|a b>*\n"},
 		{"backticks inside one span become look-alikes", "`a``b`", "`aˋˋb`\n"},
 		{"separate code spans stay separate", "`a` `b`", "`a` `b`\n"},
 		{"spaced code spans", "`a` `b` `c`", "`a` `b` `c`\n"},

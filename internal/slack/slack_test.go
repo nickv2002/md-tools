@@ -30,7 +30,7 @@ func TestConvertSlackRegressions(t *testing.T) {
 	const z = "\u200b"
 	tests := []struct{ name, input, want string }{
 		{"angle bracket link destination", "See [#123](<https://x.io/pull/123>).", "See <https://x.io/pull/123|#123>.\n"},
-		{"code span link label drops backticks", "[`PR #60017`](<https://x.io/60017>)", "<https://x.io/60017|PR #60017>\n"},
+		{"code span in a link label keeps its backticks", "[`PR #60017`](<https://x.io/60017>)", "<https://x.io/60017|`PR #60017`>\n"},
 		{"fence inside list item", "1. Confirm\n   the build.\n2. Compare:\n\n   ```bash\n   git diff a b\n   ```\n\n3. Done", "1. Confirm the build.\n2. Compare:\n```\ngit diff a b\n```\n3. Done\n"},
 		{"nested list has no trailing space", "- top\n  - child **bold**\n    - grand", "- top\n  - child *bold*\n    - grand\n"},
 		{"bold inside heading", "## **Verdict:** see [doc](https://a.b) and __init__", "*Verdict: see <https://a.b|doc> and init*\n"},
@@ -43,7 +43,7 @@ func TestConvertSlackRegressions(t *testing.T) {
 		{"escaped asterisks are neutralized", "Price \\*not bold\\*", "Price ∗not bold∗\n"},
 		{"second paragraph in list item stays on its own line", "- first\n\n  second\n- next", "- first\nsecond\n- next\n"},
 		{"escaped backtick cannot open code", "\\`not code\\`", "ˋnot codeˋ\n"},
-		{"emphasis markers dropped in link label", "[**b**](https://x.io/b) [_i_](https://x.io/i) [~~s~~](https://x.io/s) [`c`](https://x.io/c)", "<https://x.io/b|b> <https://x.io/i|i> <https://x.io/s|s> <https://x.io/c|c>\n"},
+		{"emphasis in a link label is kept", "[**b**](https://x.io/b) [_i_](https://x.io/i) [~~s~~](https://x.io/s) [`c`](https://x.io/c)", "<https://x.io/b|*b*> <https://x.io/i|_i_> <https://x.io/s|~s~> <https://x.io/c|`c`>\n"},
 		{"escaped punctuation loses backslash", "1\\. and \\> and a\\.b", "1. and &gt; and a.b\n"},
 		{"image inside link", "[![alt](https://i.io/a.png)](https://x.io)", "<https://x.io|alt>\n"},
 		{"link syntax in code span stays literal", "Run `[a](https://x.io)` or `curl https://x.io/a`", "Run `[a](https://x.io)` or `curl https://x.io/a`\n"},
