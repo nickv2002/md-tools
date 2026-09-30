@@ -322,7 +322,7 @@ func TestTableLinksBecomeFootnotes(t *testing.T) {
 			"```\nS\n-------\napi [1]\ndb [2]\n```\n[1] <https://x.io/a|api>\n[2] <https://x.io/b|db>\n"},
 		{"unlinkable targets stay label (url) with no footnote", "| S |\n|---|\n| [rel](/docs/a.md) |", "```\nS\n----------------\nrel (/docs/a.md)\n```\n"},
 		{"a table without links has no footnotes", "| S |\n|---|\n| a |", "```\nS\n-\na\n```\n"},
-		{"markup in a footnote label is kept, escapes are neutralized", "| S | L |\n|---|---|\n| a | [**b**\\*](https://x.io) |", "```\nS | L\n--+-------\na | b* [1]\n```\n[1] <https://x.io|*b*∗>\n"},
+		{"markup in a footnote label is kept, escapes are neutralized", "| S | L |\n|---|---|\n| a | [**b**\\*](https://x.io) |", "```\nS | L\n--+-------\na | b* [1]\n```\n[1] <https://x.io|*b*" + "\u200a" + "∗>\n"},
 	})
 }
 
@@ -342,7 +342,7 @@ func TestEmphasisTouchingWordsGetsHairSpace(t *testing.T) {
 		{"strikethrough at word edges needs none", "a ~~b~~, c", "a ~b~, c\n"},
 		{"adjacent spans are separated", "**a**_b_", "*a*" + h + "_b_\n"},
 		{"code span after a word", "日本`x`, y", "日本" + h + "`x`, y\n"},
-		{"code span before a word", "`x`y", "`x`" + h + "y\n"},
+		{"code span before a word needs no gap", "`x`y", "`x`y\n"},
 		{"span after a code span", "`c`*b*", "`c`" + h + "_b_\n"},
 		{"code span between spaces needs none", "a `x` b", "a `x` b\n"},
 		{"link neighbour needs no gap", "[l](https://x.io)**b**", "<https://x.io|l>*b*\n"},
@@ -432,7 +432,7 @@ func TestInlineCodeEdgeCases(t *testing.T) {
 		{"entities and mentions are escaped", "`a&b <!channel>`", "`a&amp;b &lt;!channel&gt;`\n"},
 		{"backtick inside a double-tick span", "`` a`b ``", "`aˋb`\n"},
 		{"code inside emphasis and strike", "**`x`** *`y`* ~~`z`~~", "*`x`* _`y`_ ~`z`~\n"},
-		{"code touching a word gets a gap on both sides", "日本`x`y", "日本" + h + "`x`" + h + "y\n"},
+		{"code after a word gets a gap, not before one", "日本`x`y", "日本" + h + "`x`y\n"},
 		{"code in a link label keeps its ticks", "[`w`](https://e.com)", "<https://e.com|`w`>\n"},
 		{"link spanning backticks", "[my `cool` link](https://foo.com)", "<https://foo.com|my `cool` link>\n"},
 		{"label with bold and code", "[**bold** and `code`](https://foo.com)", "<https://foo.com|*bold* and `code`>\n"},
@@ -498,4 +498,43 @@ func FuzzTableGrid(f *testing.F) {
 			}
 		}
 	})
+}
+
+func TestSpanBoundariesMeasuredInSlack(t *testing.T) {
+	const h = "\u200a"
+	runCases(t, []struct{ name, input, want string }{
+		{"after a closing paren", "(see foo)**bold**", "(see foo)" + h + "*bold*\n"},
+		{"after an apostrophe", "it's**x**", "it's" + h + "*x*\n"},
+		{"after a closing bracket", "[a]**x**", "[a]" + h + "*x*\n"},
+		{"after a middle dot", "a·**x**", "a·" + h + "*x*\n"},
+		{"after a backslash", "a\\\\**x**", "a\\" + h + "*x*\n"},
+		{"after a pipe", "a|**x**", "a|" + h + "*x*\n"},
+		{"after fullwidth punctuation", "（注）**重点**", "（注）" + h + "*重点*\n"},
+		{"after guillemets", "«a»**x**", "«a»" + h + "*x*\n"},
+		{"before an opening paren", "**x**(y)", "*x*" + h + "(y)\n"},
+		{"before fullwidth punctuation", "**重点**，好", "*重点*" + h + "，好\n"},
+		{"before an ampersand", "**x**&amp;y", "*x*" + h + "&amp;y\n"},
+		{"before a pipe", "**x**|y", "*x*" + h + "|y\n"},
+		{"opening after an opening paren needs none", "(**x**)", "(*x*)\n"},
+		{"opening after a quote needs none", "\"**x**\"", "\"*x*\"\n"},
+		{"before a closing paren needs none", "(**x**)", "(*x*)\n"},
+		{"before a comma needs none", "**x**, y", "*x*, y\n"},
+		{"a link neighbour is a boundary", "[l](https://x.io)**b**", "<https://x.io|l>*b*\n"},
+		{"code after a closing paren", "(paren)`code`", "(paren)" + h + "`code`\n"},
+		{"code after a colon needs none", "run:`code`", "run:`code`\n"},
+		{"code before anything needs none", "`code`)", "`code`)\n"},
+		{"strike before a letter", "~~a~~b", "~a~" + h + "b\n"},
+	})
+}
+
+func TestHairSpaceSurvivesWhitespaceCleanup(t *testing.T) {
+	const h = "\u200a"
+	runCases(t, []struct{ name, input, want string }{
+		{"in a heading", "# foo*bar*baz", "*foo" + h + "_bar_" + h + "baz*\n"},
+		{"in a link label", "[foo**bar**baz](https://x.io)", "<https://x.io|foo" + h + "*bar*" + h + "baz>\n"},
+	})
+	got := ConvertWith([]byte("| A | B |\n|---|---|\n| r | x**y**z |"), Options{MaxTableWidth: 1})
+	if want := "*r*\nB: x" + h + "*y*" + h + "z\n"; got != want {
+		t.Errorf("table record: got %q, want %q", got, want)
+	}
 }
