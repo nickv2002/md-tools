@@ -5,6 +5,7 @@ import (
 	"html"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -18,7 +19,7 @@ var parser = goldmark.New(goldmark.WithExtensions(extension.GFM))
 // Convert renders Markdown as Slack mrkdwn. Unsupported block syntax is
 // rendered as readable plain text; front matter and raw HTML are omitted.
 func Convert(input []byte) string {
-	source := stripFrontMatter(input)
+	source := stripFrontMatter([]byte(strings.ToValidUTF8(string(input), "\ufffd")))
 	root := parser.Parser().Parse(text.NewReader(source))
 	return strings.TrimSpace(renderChildren(root, source, 0)) + "\n"
 }
@@ -97,12 +98,57 @@ func unescapeText(s string, neutralize bool) string {
 	return b.String()
 }
 
-// slackURL escapes a link target. Slack splits <url|label> on the first pipe
-// and ends the link at whitespace, so both are percent-encoded.
+// slackURL escapes a link target. Slack splits <url|label> on the first pipe,
+// ends the link at whitespace, and reads < and > as delimiters, so those and
+// control characters are percent-encoded before entity escaping.
 func slackURL(u string) string {
-	u = strings.ReplaceAll(u, "|", "%7C")
-	u = strings.ReplaceAll(u, " ", "%20")
-	return escape(u)
+	var b strings.Builder
+	for _, r := range u {
+		switch {
+		case r == '|' || r == ' ' || r == '<' || r == '>' || r < 0x20 || r == 0x7f || r == 0x85 || r == 0x2028 || r == 0x2029:
+			for _, c := range []byte(string(r)) {
+				fmt.Fprintf(&b, "%%%02X", c)
+			}
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return escape(b.String())
+}
+
+// linkSchemes are the URL schemes Slack turns into clickable links.
+var linkSchemes = map[string]bool{"http": true, "https": true, "mailto": true, "tel": true, "ftp": true}
+
+// linkTarget resolves a Markdown destination to text Slack can link. ok is
+// false for empty, relative or non-linkable destinations (javascript:, data:,
+// #anchors, paths), which callers render as plain text instead.
+func linkTarget(dest string) (target string, ok bool) {
+	dest = strings.TrimSpace(unescapeText(dest, false))
+	if i := strings.IndexAny(dest, ":/?#"); i > 0 && dest[i] == ':' && linkSchemes[strings.ToLower(dest[:i])] && len(dest) > i+1 {
+		return dest, true
+	}
+	return dest, false
+}
+
+// slackLink renders <url|label>, or label (url) when Slack cannot represent
+// the link: an unlinkable destination or a label holding the | separator.
+func slackLink(dest, label string) string {
+	label = strings.Join(strings.Fields(label), " ")
+	target, ok := linkTarget(dest)
+	switch {
+	case target == "":
+		return label
+	case !ok:
+		if label == "" {
+			return escape(target)
+		}
+		return label + " (" + escape(target) + ")"
+	case label == "" || label == escape(target):
+		return "<" + slackURL(target) + ">"
+	case strings.Contains(label, "|"):
+		return label + " (<" + slackURL(target) + ">)"
+	}
+	return "<" + slackURL(target) + "|" + label + ">"
 }
 
 // fenceSafe keeps ``` inside code content from closing the Slack code block.
@@ -167,26 +213,31 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 		if c.link {
 			return b.String() // Slack does not render code inside a link label
 		}
+		if strings.TrimSpace(b.String()) == "" {
+			return b.String() // Slack shows an empty code span as bare backticks
+		}
 		return "`" + strings.ReplaceAll(b.String(), "`", "ˋ") + "`"
 	case *ast.Link:
 		c.link = true
-		label := strings.TrimSpace(childrenInline(n, source, c))
-		url := slackURL(string(n.Destination))
-		if label == "" || label == url {
-			return "<" + url + ">"
-		}
-		return "<" + url + "|" + label + ">"
+		return slackLink(string(n.Destination), childrenInline(n, source, c))
 	case *ast.AutoLink:
-		return "<" + slackURL(string(n.URL(source))) + ">"
+		url := string(n.URL(source))
+		if n.AutoLinkType == ast.AutoLinkEmail {
+			return slackLink("mailto:"+url, escape(url))
+		}
+		return slackLink(url, "")
 	case *ast.Image:
 		label := strings.TrimSpace(childrenInline(n, source, c))
+		if target, ok := linkTarget(string(n.Destination)); !ok && target == "" {
+			return label
+		}
 		if label == "" {
 			label = "image"
 		}
 		if c.link {
 			return label // a link label cannot hold another link
 		}
-		return "<" + slackURL(string(n.Destination)) + "|" + label + ">"
+		return slackLink(string(n.Destination), label)
 	case *extast.TaskCheckBox:
 		if n.IsChecked {
 			return "☑ "
@@ -236,8 +287,8 @@ func renderList(n *ast.List, source []byte, depth int) string {
 			switch child.(type) {
 			case *ast.List:
 				part = "\n" + renderBlock(child, source, depth+1)
-			case *ast.FencedCodeBlock, *ast.CodeBlock, *extast.Table:
-				// A fence only renders when it starts its own line.
+			case *ast.FencedCodeBlock, *ast.CodeBlock, *extast.Table, *ast.Blockquote:
+				// A fence or quote marker only renders when it starts its own line.
 				part = "\n" + renderBlock(child, source, depth+1)
 			default:
 				part = strings.TrimSpace(renderBlock(child, source, depth+1))
@@ -288,7 +339,7 @@ func plainText(node ast.Node, source []byte) string {
 			}
 		case *ast.Link:
 			label := strings.TrimSpace(plainText(n, source))
-			url := string(n.Destination)
+			url := strings.TrimSpace(unescapeText(string(n.Destination), false))
 			if label == "" || label == url {
 				b.WriteString(url)
 			} else {
@@ -315,32 +366,98 @@ func plainText(node ast.Node, source []byte) string {
 	return strings.Join(strings.Fields(b.String()), " ")
 }
 
-// runeWidth approximates terminal cell width: 0 for combining marks and
-// joiners, 2 for East Asian wide characters and emoji, 1 otherwise.
-func runeWidth(r rune) int {
-	switch {
-	case r == 0x200d || (r >= 0x0300 && r <= 0x036f) || (r >= 0xfe00 && r <= 0xfe0f):
-		return 0
-	case (r >= 0x1100 && r <= 0x115f) || (r >= 0x2e80 && r <= 0xa4cf) ||
-		(r >= 0xac00 && r <= 0xd7a3) || (r >= 0xf900 && r <= 0xfaff) ||
-		(r >= 0xfe30 && r <= 0xfe6f) || (r >= 0xff00 && r <= 0xff60) ||
-		(r >= 0xffe0 && r <= 0xffe6) || (r >= 0x1f300 && r <= 0x1faff) || r == 0x2705 || r == 0x274c || r == 0x2b50 ||
-		(r >= 0x20000 && r <= 0x3fffd):
-		return 2
-	}
-	return 1
+// wideRanges lists code points that render two cells wide: East Asian Wide
+// and Fullwidth blocks plus characters with default emoji presentation.
+var wideRanges = [][2]rune{
+	{0x1100, 0x115f}, {0x231a, 0x231b}, {0x2329, 0x232a}, {0x23e9, 0x23ec}, {0x23f0, 0x23f0}, {0x23f3, 0x23f3},
+	{0x25fd, 0x25fe}, {0x2614, 0x2615}, {0x2648, 0x2653}, {0x267f, 0x267f}, {0x2693, 0x2693}, {0x26a1, 0x26a1},
+	{0x26aa, 0x26ab}, {0x26bd, 0x26be}, {0x26c4, 0x26c5}, {0x26ce, 0x26ce}, {0x26d4, 0x26d4}, {0x26ea, 0x26ea},
+	{0x26f2, 0x26f3}, {0x26f5, 0x26f5}, {0x26fa, 0x26fa}, {0x26fd, 0x26fd}, {0x2705, 0x2705}, {0x270a, 0x270b},
+	{0x2728, 0x2728}, {0x274c, 0x274c}, {0x274e, 0x274e}, {0x2753, 0x2755}, {0x2757, 0x2757}, {0x2795, 0x2797},
+	{0x27b0, 0x27b0}, {0x27bf, 0x27bf}, {0x2b1b, 0x2b1c}, {0x2b50, 0x2b50}, {0x2b55, 0x2b55},
+	{0x2e80, 0x303e}, {0x3041, 0xa4cf}, {0xa960, 0xa97f}, {0xac00, 0xd7a3}, {0xf900, 0xfaff}, {0xfe30, 0xfe6f},
+	{0xff00, 0xff60}, {0xffe0, 0xffe6},
+	{0x1f004, 0x1f004}, {0x1f0cf, 0x1f0cf}, {0x1f18e, 0x1f18e}, {0x1f191, 0x1f19a}, {0x1f200, 0x1f320},
+	{0x1f32d, 0x1f335}, {0x1f337, 0x1f37c}, {0x1f37e, 0x1f393}, {0x1f3a0, 0x1f3ca}, {0x1f3cf, 0x1f3d3},
+	{0x1f3e0, 0x1f3f0}, {0x1f3f4, 0x1f3f4}, {0x1f3f8, 0x1f43e}, {0x1f440, 0x1f440}, {0x1f442, 0x1f4fc},
+	{0x1f4ff, 0x1f53d}, {0x1f54b, 0x1f54e}, {0x1f550, 0x1f567}, {0x1f57a, 0x1f57a}, {0x1f595, 0x1f596},
+	{0x1f5a4, 0x1f5a4}, {0x1f5fb, 0x1f64f}, {0x1f680, 0x1f6c5}, {0x1f6cc, 0x1f6cc}, {0x1f6d0, 0x1f6d2},
+	{0x1f6d5, 0x1f6d7}, {0x1f6dc, 0x1f6df}, {0x1f6eb, 0x1f6ec}, {0x1f6f4, 0x1f6fc}, {0x1f7e0, 0x1f7eb},
+	{0x1f7f0, 0x1f7f0}, {0x1f90c, 0x1f93a}, {0x1f93c, 0x1f945}, {0x1f947, 0x1f9ff}, {0x1fa70, 0x1faff},
+	{0x20000, 0x3fffd},
 }
 
+func isWide(r rune) bool {
+	for _, w := range wideRanges {
+		if r < w[0] {
+			return false
+		}
+		if r <= w[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// isZeroWidth reports combining marks, format characters (ZWJ, ZWSP, tags,
+// variation selectors) and controls, which occupy no cell of their own.
+func isZeroWidth(r rune) bool {
+	return unicode.In(r, unicode.Mn, unicode.Me, unicode.Cf, unicode.Cc) || (r >= 0x1160 && r <= 0x11ff)
+}
+
+func isRegionalIndicator(r rune) bool { return r >= 0x1f1e6 && r <= 0x1f1ff }
+
+func isEmojiModifier(r rune) bool { return r >= 0x1f3fb && r <= 0x1f3ff }
+
+// displayWidth approximates monospace cell width by grapheme cluster: a base
+// character followed by combining marks or a text/emoji variation selector,
+// an emoji with a skin-tone modifier, a flag (two regional indicators) and a
+// ZWJ sequence each take the width of their base, and a sequence that is
+// emoji-styled (VS16, modifier, keycap, flag, ZWJ) is two cells wide.
 func displayWidth(s string) int {
-	w := 0
-	for _, r := range s {
-		if r == 0xfe0f && w > 0 { // emoji presentation selector widens the previous rune
-			w++
+	rs := []rune(s)
+	total := 0
+	for i := 0; i < len(rs); {
+		base := rs[i]
+		i++
+		if isZeroWidth(base) {
 			continue
 		}
-		w += runeWidth(r)
+		width := 1
+		if isWide(base) {
+			width = 2
+		}
+		emoji := false
+		if isRegionalIndicator(base) { // a flag, or a lone letter drawn in a box
+			if i < len(rs) && isRegionalIndicator(rs[i]) {
+				i++
+			}
+			width, emoji = 2, true
+		}
+		for i < len(rs) {
+			r := rs[i]
+			switch {
+			case r == 0xfe0f || r == 0x20e3 || isEmojiModifier(r):
+				emoji = true
+			case r == 0x200d && i+1 < len(rs) && !isZeroWidth(rs[i+1]):
+				i++ // the joined character belongs to this cluster
+				emoji = true
+			case r == 0xfe0e:
+				width = 1 // text presentation
+				emoji = false
+			case isZeroWidth(r):
+			default:
+				goto done
+			}
+			i++
+		}
+	done:
+		if emoji {
+			width = 2
+		}
+		total += width
 	}
-	return w
+	return total
 }
 
 func pad(s string, width int, align extast.Alignment) string {
@@ -398,8 +515,14 @@ func renderTable(n *extast.Table, source []byte) string {
 			}
 			parts[i] = pad(cell, widths[i], a)
 		}
-		row := strings.TrimRight(strings.Join(parts, " | "), " ")
-		return strings.TrimSuffix(row, " |")
+		last := len(cells) - 1 // trailing empty cells add no visible text
+		for last >= 0 && cells[last] == "" {
+			last--
+		}
+		if last < 0 {
+			return ""
+		}
+		return strings.TrimRight(strings.Join(parts[:last+1], " | "), " ")
 	}
 	rule := make([]string, cols)
 	for i, w := range widths {
@@ -420,7 +543,11 @@ func renderBlock(node ast.Node, source []byte, depth int) string {
 	case *ast.Paragraph, *ast.TextBlock:
 		return childrenInline(node, source, inlineCtx{})
 	case *ast.Heading:
-		return "*" + strings.TrimSpace(childrenInline(n, source, inlineCtx{bold: true})) + "*"
+		title := strings.Join(strings.Fields(childrenInline(n, source, inlineCtx{bold: true})), " ")
+		if title == "" {
+			return ""
+		}
+		return "*" + title + "*"
 	case *ast.List:
 		return renderList(n, source, depth)
 	case *ast.Blockquote:
