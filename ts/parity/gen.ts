@@ -139,13 +139,27 @@ export function mutate(r: Rng, s: string): string {
   return chars.join('')
 }
 
-/** A deterministic mixed batch of inputs. */
-export function generate(seed: number, n: number, pool: string[] = []): string[] {
+const INVALID_BYTES = [0x80, 0xbf, 0xc0, 0xc1, 0xe0, 0xed, 0xf0, 0xf5, 0xff]
+
+/** Replaces or inserts a few raw bytes so the input is no longer valid UTF-8. */
+function corrupt(r: Rng, s: string): Uint8Array {
+  const bytes = Array.from(new TextEncoder().encode(s))
+  for (let k = int(r, 1, 3); k > 0; k--) {
+    const at = int(r, 0, bytes.length)
+    if (chance(r, 0.5) && at < bytes.length) bytes[at] = pick(r, INVALID_BYTES)
+    else bytes.splice(at, 0, ...Array.from({ length: int(r, 1, 3) }, () => pick(r, INVALID_BYTES)))
+  }
+  return Uint8Array.from(bytes)
+}
+
+/** A deterministic mixed batch of inputs; pool entries are decoded text to mutate. */
+export function generate(seed: number, n: number, pool: string[] = []): Array<string | Uint8Array> {
   const r = mulberry32(seed)
-  const out: string[] = []
+  const out: Array<string | Uint8Array> = []
   for (let i = 0; i < n; i++) {
     const p = r()
-    if (p < 0.5) out.push(grammarDoc(r))
+    if (p < 0.03) out.push(corrupt(r, grammarDoc(r)))
+    else if (p < 0.5) out.push(grammarDoc(r))
     else if (p < 0.75) out.push(soupDoc(r))
     else if (pool.length > 0) out.push(mutate(r, pick(r, pool)))
     else out.push(mutate(r, grammarDoc(r)))

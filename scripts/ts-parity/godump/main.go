@@ -166,6 +166,27 @@ func corpus(root string, extra []string) {
 	}
 }
 
+// fuzzfiles prints every string or []byte argument of the given Go fuzz corpus files as base64.
+func fuzzfiles(paths []string) {
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(data), "\n")
+		if len(lines) == 0 || !strings.HasPrefix(lines[0], "go test fuzz v1") {
+			continue
+		}
+		for _, line := range lines[1:] {
+			if i := strings.Index(line, "("); i > 0 && strings.HasSuffix(line, ")") && (strings.HasPrefix(line, "string(") || strings.HasPrefix(line, "[]byte(")) {
+				if s, err := strconv.Unquote(line[i+1 : len(line)-1]); err == nil {
+					fmt.Println(b64([]byte(s)))
+				}
+			}
+		}
+	}
+}
+
 // classes prints one byte per code point: bit 0 punctuation or symbol, bit 1 space, bit 2 zero-width (Mn, Me, Cf, Cc).
 func classes() {
 	out := make([]byte, 0x110000)
@@ -193,6 +214,8 @@ func main() {
 	switch os.Args[1] {
 	case "serve":
 		serve()
+	case "fuzzfiles":
+		fuzzfiles(os.Args[2:])
 	case "classes":
 		classes()
 	case "corpus":

@@ -27,7 +27,17 @@ export const strikethroughParser: InlineParser = {
 
 // ---------- task list checkbox ----------
 
-const taskListRegexp = /^\[([\t\n\f\r xX])\][\t\n\f\r ]*/
+const isTaskSpace = (c: number): boolean => c === 0x20 || (c >= 0x09 && c <= 0x0d && c !== 0x0b)
+
+/** The length of a leading [ ], [x] or [X] and the white space after it, or 0 (goldmark's ^\[([\s xX])\]\s* regexp). */
+function taskBoxLength(line: Uint8Array): number {
+  if (line.length < 3 || line[0] !== 0x5b || line[2] !== 0x5d) return 0
+  const c = line[1]!
+  if (!(isTaskSpace(c) || c === 0x78 || c === 0x58)) return 0
+  let i = 3
+  while (i < line.length && isTaskSpace(line[i]!)) i++
+  return i
+}
 
 export const taskCheckBoxParser: InlineParser = {
   trigger: [0x5b],
@@ -36,10 +46,10 @@ export const taskCheckBoxParser: InlineParser = {
     if (parent.hasChildren()) return null
     if (parent.parent.kind !== 'ListItem') return null
     const [line] = block.peekLine()
-    const m = taskListRegexp.exec(latin1(line!))
-    if (m === null) return null
-    const value = m[1]!.charCodeAt(0)
-    block.advance(m[0].length)
+    const length = taskBoxLength(line!)
+    if (length === 0) return null
+    const value = line![1]!
+    block.advance(length)
     const n = new GNode('TaskCheckBox')
     n.isChecked = value === 0x78 || value === 0x58
     return n
@@ -76,13 +86,12 @@ export const linkifyParser: InlineParser = {
     let m: [number, number] | null = null
     let protocol: Uint8Array | null = null
     let typ: 'email' | 'url' = 'url'
-    const text = latin1(line)
     if (hasPrefix(line, 'http:') || hasPrefix(line, 'https:') || hasPrefix(line, 'ftp:')) {
-      const r = urlRegexp.exec(text)
+      const r = urlRegexp.exec(latin1(line))
       if (r) m = [r.index, r.index + r[0].length]
     }
     if (m === null && hasPrefix(line, 'www.')) {
-      const r = wwwURLRegexp.exec(text)
+      const r = wwwURLRegexp.exec(latin1(line))
       m = r ? [r.index, r.index + r[0].length] : null
       protocol = new TextEncoder().encode('http')
     }

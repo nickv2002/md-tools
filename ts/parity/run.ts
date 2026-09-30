@@ -1,4 +1,4 @@
-import { buildGo, goCorpus, goldmarkCorpus, runGo } from './golib.js'
+import { buildGo, goCorpus, goFuzzCache, goldmarkCorpus, runGo, toText } from './golib.js'
 import { fromJSON, link, type Node } from '../src/tree.js'
 import { renderDocument } from '../src/render.js'
 import { markdownToSlackMrkdwn, prepare } from '../src/index.js'
@@ -12,7 +12,7 @@ const DEFAULT_WIDTH = 100
 
 async function main() {
   buildGo()
-  const inputs = process.argv[4] === 'goldmark' ? goldmarkCorpus() : goCorpus()
+  const inputs = process.argv[4] === 'goldmark' ? goldmarkCorpus() : process.argv[4] === 'gofuzz' ? goFuzzCache() : goCorpus()
   console.log(`corpus: ${inputs.length} strings`)
   const results = await runGo(inputs.map((input) => ({ input, ast: true })))
   let bad = 0
@@ -25,11 +25,11 @@ async function main() {
       if (got !== r.out) detail = `go ${JSON.stringify(r.out)}\n  ts ${JSON.stringify(got)}`
     } else if (mode === 'tree') {
       const goTree = normalize(link(fromJSON(r.ast as never)) as Node)
-      const source = prepare(input)
+      const source = prepare(toText(input))
       const d = firstDiff(goTree, normalize(parseMarkdown(source)))
       if (d) detail = `${d}\n  go tree ${compact(goTree)}\n  ts tree ${compact(normalize(parseMarkdown(source)))}`
     } else {
-      const got = markdownToSlackMrkdwn(input)
+      const got = markdownToSlackMrkdwn(toText(input))
       if (got !== r.out) detail = `go ${JSON.stringify(r.out)}\n  ts ${JSON.stringify(got)}`
     }
     } catch (e) {
