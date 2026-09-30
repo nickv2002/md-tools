@@ -62,6 +62,9 @@ func TestConvertSlackRegressions(t *testing.T) {
 		{"reference link", "[ref][1]\n\n[1]: https://ref.example", "<https://ref.example|ref>\n"},
 		{"emoji shortcodes", ":white_check_mark: done ✅", ":white_check_mark: done ✅\n"},
 		{"strikethrough", "~~double~~ ~single~", "~double~ ~single~\n"},
+		{"agent reply with angle-bracket links, bold labels, code in a label, and italic",
+			"Checked: `limit: 1` is set in [PR #10](<https://git.example/pull/10>), commit [`abc1234`](<https://git.example/commit/abc1234>).\n\n**Who/when:** Sam added it in [PR #20](<https://git.example/pull/20>) on Sep 14; it was reverted in [PR #30](<https://git.example/pull/30>) (“too strict”).\n\nSo `1` is a cap for *this matrix*, not every workload; see [the thread](<https://chat.example/p1>).",
+			"Checked: `limit: 1` is set in <https://git.example/pull/10|PR #10>, commit <https://git.example/commit/abc1234|`abc1234`>.\n\n*Who/when:* Sam added it in <https://git.example/pull/20|PR #20> on Sep 14; it was reverted in <https://git.example/pull/30|PR #30> (“too strict”).\n\nSo `1` is a cap for _this matrix_, not every workload; see <https://chat.example/p1|the thread>.\n"},
 		{"table cell escapes entity once", "| A |\n|---|\n| `a\\|b` &amp; c |", "```\nA\n-------\na|b &amp; c\n```\n"},
 	}
 	for _, tt := range tests {
