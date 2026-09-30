@@ -397,3 +397,21 @@ func TestItalicEndingInPunctuationInsideASpan(t *testing.T) {
 		{"all-punctuation italic is untouched", "**_..._**", "*_..._*\n"},
 	})
 }
+
+func TestInlineCodeEdgeCases(t *testing.T) {
+	const h = "\u200a"
+	runCases(t, []struct{ name, input, want string }{
+		{"line break inside a code span is a space", "`multi\nline` code", "`multi line` code\n"},
+		{"trailing spaces before a line end are kept", "`a  \nb`", "`a   b`\n"},
+		{"markers inside code stay literal", "`a*b*c` `_x_` `~~s~~`", "`a*b*c` `_x_` `~~s~~`\n"},
+		{"entities and mentions are escaped", "`a&b <!channel>`", "`a&amp;b &lt;!channel&gt;`\n"},
+		{"backtick inside a double-tick span", "`` a`b ``", "`aˋb`\n"},
+		{"code inside emphasis and strike", "**`x`** *`y`* ~~`z`~~", "*`x`* _`y`_ ~`z`~\n"},
+		{"code touching a word gets a gap on both sides", "日本`x`y", "日本" + h + "`x`" + h + "y\n"},
+		{"code in a link label loses its ticks", "[`w`](https://e.com)", "<https://e.com|w>\n"},
+		{"backticks inside one span become look-alikes", "`a``b`", "`aˋˋb`\n"},
+		{"separate code spans stay separate", "`a` `b`", "`a` `b`\n"},
+		{"spaced code spans", "`a` `b` `c`", "`a` `b` `c`\n"},
+		{"backslash and glob stay literal", "`C:\\dir` `*.go`", "`C:\\dir` `*.go`\n"},
+	})
+}

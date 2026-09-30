@@ -345,11 +345,13 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 		for child := n.FirstChild(); child != nil; child = child.NextSibling() {
 			if t, ok := child.(*ast.Text); ok {
 				b.WriteString(escape(string(t.Segment.Value(source))))
-				if t.SoftLineBreak() || t.HardLineBreak() {
-					b.WriteByte(' ')
-				}
 			}
 		}
+		// A line ending inside a code span is a space, and Slack only formats
+		// code that stays on one line.
+		codeText := strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(b.String())
+		b.Reset()
+		b.WriteString(codeText)
 		if c.link {
 			return b.String() // Slack does not render code inside a link label
 		}
