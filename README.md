@@ -45,6 +45,29 @@ quotes, and lists to Slack formatting. Headings become bold lines; tables
 become monospace blocks; images become links; front matter and raw HTML are
 omitted. The output is a readable approximation, not a lossless conversion.
 
+## md2mkdwn converter contract
+
+For programs that run `md2mkdwn` as a subprocess. The converter is a readable approximation of GitHub Flavored Markdown (parsed by goldmark with the GFM extension) in Slack's mrkdwn dialect, not a lossless renderer.
+
+**Invocation and I/O**
+
+- `md2mkdwn FILE` reads a file; `md2mkdwn -` reads stdin. Pass `-` explicitly when piping possibly empty input: with no argument, an empty or terminal stdin prints the usage text and exits 0 instead of converting. Use `--` before a file name that starts with a dash.
+- Input must be valid UTF-8. CRLF and CR line endings are normalized to LF. Invalid UTF-8 is rejected with exit 1 (the library function `slack.Convert` instead replaces bad bytes with U+FFFD).
+- On success stdout receives the mrkdwn in a single write: valid UTF-8, LF line endings, exactly one trailing newline (empty or whitespace-only input yields a single `\n`), and the same bytes for the same input whether it came from a file or stdin. Nothing else is written to stdout except `--version` and help output.
+- Errors go to stderr prefixed `md2mkdwn:` with nothing on stdout. Exit codes: `0` success, help or version; `1` unreadable input, invalid UTF-8 or a write failure; `2` bad flags or more than one file argument.
+- The command never writes files, reads the network, or executes anything from the input.
+
+**Output guarantees**
+
+- `&`, `<` and `>` are escaped as `&amp;`, `&lt;` and `&gt;` everywhere, including code. The only raw `<` in the output starts a link (`<url|label>` or `<url>`), so input such as `<!channel>`, `<@U123>` or `<#C123>` can never become a mention or channel reference. A bare `@here` stays plain text.
+- Links are emitted only for the schemes `http`, `https`, `mailto`, `tel` and `ftp`. Anything else (relative paths, `#anchors`, `javascript:`, `data:`) becomes `label (target)` text. The same fallback applies when the label contains `|`, which Slack uses as the label separator (`label (<url>)`). An empty destination keeps just the label. `|`, spaces, `<`, `>` and control characters in a URL are percent-encoded. Image destinations follow the same rules, with the alt text (or `image`) as the label.
+- Emphasis becomes `_italic_`, `*bold*` and `~strike~`; headings become bold lines; markers inside link labels and headings are dropped because Slack shows them literally. Literal `*` and backticks from Markdown escapes become look-alike characters (`∗`, `ˋ`) and a zero-width space guards `_` and `~`, since mrkdwn has no escape character.
+- Code spans and fences keep their text; a run of three backticks inside code is broken with a zero-width space so it cannot close the block. Fence info strings are dropped.
+- Lists keep nesting and ordinals. Fences, tables and quotes inside a list item start their own line, so Slack flattens their indentation. Task list items become `☐` and `☑`.
+- Tables are a padded monospace block: cells are flattened to plain text (links become `label (url)`), missing cells are blank, extra cells are dropped, and alignment comes from the delimiter row. Column width counts grapheme clusters (combining marks, variation selectors, skin tones, flags and ZWJ sequences count as one glyph, two cells for emoji). Slack's fallback fonts can still draw some CJK and emoji a cell narrower.
+- Front matter, HTML blocks, inline HTML (except `<br>`, which becomes a line break) and empty headings are omitted.
+- Malformed or unsupported Markdown degrades to readable text and never panics; `go test -fuzz FuzzConvert ./internal/slack` checks this.
+
 ## macOS trust
 
 The macOS executables are signed with a Developer ID and their ZIP is submitted
@@ -55,7 +78,8 @@ connection for Gatekeeper to retrieve the ticket. No disk image is distributed.
 ## Development
 
 ```bash
-go test ./...
+make check                 # gofmt, go vet and tests, identical to CI
+go test -race ./...
 go build ./cmd/mdunwrap ./cmd/md2mkdwn
 ```
 
