@@ -291,7 +291,8 @@ func TestEmphasisTouchingWordsGetsHairSpace(t *testing.T) {
 		{"punctuation needs no gap", "(**b**) \"**c**\" **d**.", "(*b*) \"*c*\" *d*.\n"},
 		{"line start and end need no gap", "**b**", "*b*\n"},
 		{"soft line break is a boundary", "a\n**b**\nc", "a *b* c\n"},
-		{"strikethrough needs no gap", "a~~b~~c", "a~b~c\n"},
+		{"strikethrough gets the same gap", "a~~b~~c", "a" + h + "~b~" + h + "c\n"},
+		{"strikethrough at word edges needs none", "a ~~b~~, c", "a ~b~, c\n"},
 		{"adjacent emphasis needs no gap", "**a**_b_", "*a*_b_\n"},
 		{"link neighbour needs no gap", "[l](https://x.io)**b**", "<https://x.io|l>*b*\n"},
 	})

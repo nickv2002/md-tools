@@ -177,10 +177,11 @@ func fenceSafe(s string) string {
 }
 
 // hairSpace is a near-invisible space Slack accepts as a word boundary.
-// Slack only opens *bold* or _italic_ after whitespace or punctuation, so
-// emphasis that touches a letter (foo**bar**, 这是**重点**) would print its
-// markers literally; a zero-width space or word joiner does not help, but
-// U+200A does (verified in real Slack).
+// Slack only formats *bold*, _italic_ and ~strike~ that start and end at
+// whitespace or punctuation, so a span that touches a letter (foo**bar**,
+// 这是**重点**, ~gone~text) would print its markers literally; a zero-width
+// space or word joiner does not help, but U+200A does (verified through the
+// chat.postMessage API).
 const hairSpace = "\u200a"
 
 func touchesWord(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r) }
@@ -291,7 +292,8 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 		if c.link {
 			return childrenInline(n, source, c)
 		}
-		return wrapMarks("~", childrenInline(n, source, c), "", "")
+		before, after := emphasisGap(n, source)
+		return wrapMarks("~", childrenInline(n, source, c), before, after)
 	case *ast.CodeSpan:
 		var b strings.Builder
 		for child := n.FirstChild(); child != nil; child = child.NextSibling() {
