@@ -282,6 +282,7 @@ type inlineCtx struct {
 	italic bool // inside an italic span
 	strike bool // inside a strikethrough span
 	link   bool // inside a link label, where nested links cannot exist
+	plain  bool // drop emphasis, strikethrough and code markup
 }
 
 func childrenInline(node ast.Node, source []byte, c inlineCtx) string {
@@ -306,7 +307,7 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 	case *ast.String:
 		return escape(string(n.Value))
 	case *ast.Emphasis:
-		if c.link { // Slack shows emphasis markers literally inside a link label
+		if c.plain {
 			return childrenInline(n, source, c)
 		}
 		mark, inner := "_", c
@@ -331,7 +332,7 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 		}
 		return wrapMarks(mark, body, before, after)
 	case *extast.Strikethrough:
-		if c.link {
+		if c.plain {
 			return childrenInline(n, source, c)
 		}
 		if c.strike {
@@ -352,8 +353,8 @@ func renderInline(node ast.Node, source []byte, c inlineCtx) string {
 		codeText := strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(b.String())
 		b.Reset()
 		b.WriteString(codeText)
-		if c.link {
-			return b.String() // Slack does not render code inside a link label
+		if c.plain {
+			return b.String()
 		}
 		if strings.TrimSpace(b.String()) == "" {
 			return b.String() // Slack shows an empty code span as bare backticks
@@ -783,7 +784,7 @@ func renderTableRecords(n *extast.Table, source []byte) string {
 	for row := n.FirstChild(); row != nil; row = row.NextSibling() {
 		if _, isHeader := row.(*extast.TableHeader); isHeader {
 			for cell := row.FirstChild(); cell != nil; cell = cell.NextSibling() {
-				headers = append(headers, inline(cell, inlineCtx{bold: true, link: true}))
+				headers = append(headers, inline(cell, inlineCtx{plain: true, link: true}))
 			}
 			continue
 		}

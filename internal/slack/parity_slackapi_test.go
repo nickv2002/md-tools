@@ -101,17 +101,15 @@ func expectedRuns(node ast.Node, source []byte, st run, out *[]run) bool {
 			r.Text, r.Code = b.String(), true
 			*out = append(*out, r)
 		case *ast.Link:
+			url := strings.TrimSpace(unescapeText(string(n.Destination), false))
 			var inner []run
-			if !expectedRuns(n, source, run{}, &inner) {
+			if !expectedRuns(n, source, st, &inner) { // outer and label styling both apply, and every fragment links
 				return false
 			}
-			var b strings.Builder
 			for _, r := range inner {
-				b.WriteString(r.Text)
+				r.URL = url
+				*out = append(*out, r)
 			}
-			r := st // outer styling applies to the whole link; markup inside the label is dropped
-			r.Text, r.URL = b.String(), strings.TrimSpace(unescapeText(string(n.Destination), false))
-			*out = append(*out, r)
 		default:
 			return false
 		}
@@ -262,7 +260,8 @@ func genSentence(r *rand.Rand) string {
 		case 4:
 			b.WriteString("`" + w + "`")
 		case 5:
-			b.WriteString("[" + w + "](https://example.com/" + strconv.Itoa(r.Intn(9)) + ")")
+			label := []string{w, "`" + w + "`", "**" + w + "** " + w, w + " `" + w + "` " + w, "_" + w + "_"}[r.Intn(5)]
+			b.WriteString("[" + label + "](https://example.com/" + strconv.Itoa(r.Intn(9)) + ")")
 		case 6:
 			inner := words[r.Intn(len(words))]
 			b.WriteString([]string{"**" + w + " _" + inner + "_**", "**_" + w + "_**", "~~_" + w + "_~~", "~~**" + w + "**~~", "_**" + w + "**_", "**" + w + " _" + inner + "_**"}[r.Intn(6)])
