@@ -454,3 +454,48 @@ func TestListBulletsAndNesting(t *testing.T) {
 		{"sibling lists restart the level", "- a\n  - b\n\ntext\n\n- c", "• a\n    ◦ b\n\ntext\n\n• c\n"},
 	})
 }
+
+// entityDecoder turns the converter's escapes back into the characters Slack displays.
+var entityDecoder = strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">")
+
+// FuzzTableGrid checks the aligned grid directly: every non-final cell of every
+// row must be padded to the width the rule line declares, whatever the cell
+// contents (CJK, emoji, combining marks, markup) and alignment.
+func FuzzTableGrid(f *testing.F) {
+	f.Add("a", "日本", "👨‍👩‍👧", "é", uint8(0))
+	f.Add("**b**", "`c`", "[l](https://x.io)", "", uint8(1))
+	f.Add("", "", "", "", uint8(2))
+	f.Fuzz(func(t *testing.T, c1, c2, c3, c4 string, align uint8) {
+		clean := func(s string) string {
+			s = strings.NewReplacer("|", "", "\n", " ", "\r", " ", "\x00", "").Replace(s)
+			return strings.ToValidUTF8(s, "")
+		}
+		cells := []string{clean(c1), clean(c2), clean(c3), clean(c4)}
+		delim := []string{"---", ":--", "--:", ":-:"}[align%4]
+		md := "| " + strings.Join(cells[:3], " | ") + " |\n|" + delim + "|" + delim + "|" + delim + "|\n| " + strings.Join(cells[1:], " | ") + " |\n"
+		got := ConvertWith([]byte(md), Options{MaxTableWidth: 0})
+		if !strings.HasPrefix(got, "```\n") {
+			return // not parsed as a table (for example a cell made the row a paragraph)
+		}
+		end := strings.Index(got[4:], "\n```")
+		if end < 0 {
+			t.Fatalf("unterminated grid for %q: %q", md, got)
+		}
+		lines := strings.Split(got[4:4+end], "\n")
+		if len(lines) < 2 {
+			return
+		}
+		rule := strings.Split(lines[1], "-+-")
+		for i, line := range lines {
+			if i == 1 {
+				continue
+			}
+			parts := strings.Split(line, " | ")
+			for j := 0; j < len(parts)-1 && j < len(rule)-1; j++ {
+				if w := displayWidth(entityDecoder.Replace(parts[j])); w != len(rule[j]) && w != len(rule[j])+1 && !strings.Contains(parts[j], "|") {
+					t.Fatalf("cell %d of line %d is %d wide, rule says %d\nmarkdown: %q\nrule: %q\nline: %q", j, i, w, len(rule[j]), md, lines[1], line)
+				}
+			}
+		}
+	})
+}
