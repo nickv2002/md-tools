@@ -14,10 +14,12 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/nickv2002/md-tools/internal/slack"
 )
@@ -103,7 +105,7 @@ func constString(e ast.Expr, consts map[string]string) (string, bool) {
 	return "", false
 }
 
-func corpus(root string) {
+func corpus(root string, extra []string) {
 	seen := map[string]bool{}
 	emit := func(s string) {
 		if !seen[s] {
@@ -113,7 +115,16 @@ func corpus(root string) {
 	}
 	files, _ := filepath.Glob(filepath.Join(root, "internal/slack/*_test.go"))
 	more, _ := filepath.Glob(filepath.Join(root, "cmd/*/*_test.go"))
-	for _, path := range append(files, more...) {
+	files = append(files, more...)
+	for _, dir := range extra {
+		filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() && strings.HasSuffix(path, "_test.go") {
+				files = append(files, path)
+			}
+			return nil
+		})
+	}
+	for _, path := range files {
 		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -155,6 +166,25 @@ func corpus(root string) {
 	}
 }
 
+// classes prints one byte per code point: bit 0 punctuation or symbol, bit 1 space, bit 2 zero-width (Mn, Me, Cf, Cc).
+func classes() {
+	out := make([]byte, 0x110000)
+	for r := rune(0); r < 0x110000; r++ {
+		var b byte
+		if unicode.IsPunct(r) || unicode.IsSymbol(r) {
+			b |= 1
+		}
+		if unicode.IsSpace(r) {
+			b |= 2
+		}
+		if unicode.In(r, unicode.Mn, unicode.Me, unicode.Cf, unicode.Cc) {
+			b |= 4
+		}
+		out[r] = b
+	}
+	os.Stdout.WriteString(b64(out))
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: godump serve | corpus <repo root>")
@@ -163,7 +193,9 @@ func main() {
 	switch os.Args[1] {
 	case "serve":
 		serve()
+	case "classes":
+		classes()
 	case "corpus":
-		corpus(os.Args[2])
+		corpus(os.Args[2], os.Args[3:])
 	}
 }

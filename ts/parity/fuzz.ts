@@ -1,6 +1,6 @@
 // Differential fuzzing against the Go converter.
 //   npx tsx parity/fuzz.ts <tree|e2e> [seed] [count] [clusters]
-import { buildGo, goCorpus, runGo } from './golib.js'
+import { buildGo, goldmarkCorpus, runGo } from './golib.js'
 import { fromJSON, link, type Node } from '../src/tree.js'
 import { markdownToSlackMrkdwn, prepare } from '../src/index.js'
 import { parseMarkdown } from '../src/parse.js'
@@ -21,8 +21,10 @@ const signature = (d: string): string =>
 
 async function main() {
   buildGo()
-  const inputs = generate(seed, count, goCorpus())
-  const results = await runGo(inputs.map((input) => ({ input, ast: mode === 'tree' })))
+  const inputs = generate(seed, count, goldmarkCorpus())
+  const WIDTHS = [undefined, undefined, 0, 1, 8, 20, 60]
+  const widths = inputs.map((_, i) => WIDTHS[(i * 2654435761 + seed) % WIDTHS.length])
+  const results = await runGo(inputs.map((input, i) => ({ input, width: widths[i], ast: mode === 'tree' })))
   const clusters = new Map<string, { n: number; input: string; detail: string }>()
   let bad = 0
   results.forEach((r, i) => {
@@ -39,7 +41,7 @@ async function main() {
           detail = `${d}\n    go ${compact(goTree)}\n    ts ${compact(tsTree)}`
         }
       } else {
-        const got = markdownToSlackMrkdwn(input)
+        const got = markdownToSlackMrkdwn(input, widths[i] === undefined ? {} : { maxTableWidth: widths[i]! })
         if (got !== r.out) {
           const a = got.split('\n')
           const b = r.out.split('\n')

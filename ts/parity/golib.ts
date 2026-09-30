@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
@@ -57,10 +57,24 @@ export async function runGo(reqs: GoRequest[]): Promise<GoResult[]> {
 }
 
 /** Every string literal in the Go tests and the Go fuzz corpus. */
-export function goCorpus(): string[] {
-  const out = execFileSync(bin, ['corpus', repoRoot], { maxBuffer: 1 << 28 }).toString()
+export function goCorpus(extra: string[] = []): string[] {
+  const out = execFileSync(bin, ['corpus', repoRoot, ...extra], { maxBuffer: 1 << 28 }).toString()
   return out
     .split('\n')
     .filter((l) => l !== '')
     .map(unb64)
+}
+
+/** The markdown examples shipped with goldmark (CommonMark spec, extension and extra tests) plus the string literals of its Go tests. */
+export function goldmarkCorpus(): string[] {
+  const dir = execFileSync('go', ['list', '-m', '-f', '{{.Dir}}', 'github.com/yuin/goldmark'], { cwd: repoRoot }).toString().trim()
+  const out = new Set<string>(goCorpus([dir]))
+  const spec = JSON.parse(readFileSync(`${dir}/_test/spec.json`, 'utf8')) as Array<{ markdown: string }>
+  for (const e of spec) out.add(e.markdown)
+  for (const file of [`${dir}/_test/extra.txt`, `${dir}/_test/options.txt`, ...readdirSync(`${dir}/extension/_test`).map((f) => `${dir}/extension/_test/${f}`)]) {
+    for (const block of readFileSync(file, 'utf8').split(/\/\/= = =[= ]*\/\//)) {
+      for (const part of block.split(/\/\/- - -[- ]*\/\//)) if (part.trim() !== '') out.add(part.replace(/^\n/, ''))
+    }
+  }
+  return [...out]
 }

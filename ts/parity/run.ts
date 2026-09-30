@@ -1,4 +1,4 @@
-import { buildGo, goCorpus, runGo } from './golib.js'
+import { buildGo, goCorpus, goldmarkCorpus, runGo } from './golib.js'
 import { fromJSON, link, type Node } from '../src/tree.js'
 import { renderDocument } from '../src/render.js'
 import { markdownToSlackMrkdwn, prepare } from '../src/index.js'
@@ -12,7 +12,7 @@ const DEFAULT_WIDTH = 100
 
 async function main() {
   buildGo()
-  const inputs = goCorpus()
+  const inputs = process.argv[4] === 'goldmark' ? goldmarkCorpus() : goCorpus()
   console.log(`corpus: ${inputs.length} strings`)
   const results = await runGo(inputs.map((input) => ({ input, ast: true })))
   let bad = 0

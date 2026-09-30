@@ -107,7 +107,7 @@ export function trimSpaceWide(source: Uint8Array): Uint8Array {
   return source.subarray(a, b)
 }
 
-const decoder = new TextDecoder('utf-8')
+const decoder = new TextDecoder('utf-8', { ignoreBOM: true })
 const encoder = new TextEncoder()
 export const bytesToString = (b: Uint8Array): string => decoder.decode(b)
 export const stringToBytes = (s: string): Uint8Array => encoder.encode(s)
