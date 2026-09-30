@@ -538,3 +538,12 @@ func TestHairSpaceSurvivesWhitespaceCleanup(t *testing.T) {
 		t.Errorf("table record: got %q, want %q", got, want)
 	}
 }
+
+func TestFlattenedSpanKeepsNextSpansGap(t *testing.T) {
+	const h = "\u200a"
+	runCases(t, []struct{ name, input, want string }{
+		{"strike after a flattened bold", "__**don't-Go**~~2~~__", "*don't-Go" + h + "~2~*\n"},
+		{"code after a flattened italic", "*_a_`c`*", "_a" + h + "`c`_\n"},
+		{"text after a flattened span needs none", "**__a__ b**", "*a b*\n"},
+	})
+}
