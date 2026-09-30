@@ -5,10 +5,11 @@
 # parsed it. The token is held in a shell variable only; never print it.
 #   scripts/slack-api/parity.sh                      # 60 generated cases, seed 1
 #   SLACK_PARITY_N=200 SLACK_PARITY_SEED=7 scripts/slack-api/parity.sh
+#   SLACK_PARITY_RAW=$'*_x._*\n@@\n*_x_*' SLACK_PARITY_RUN=TestSlackRawProbe scripts/slack-api/parity.sh   # post mrkdwn verbatim
 #   SLACK_PARITY_INPUT='foo**bar**' scripts/slack-api/parity.sh
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 SLACK_BOT_TOKEN="$(op item get REDACTED --account REDACTED \
   --fields label=REDACTED --reveal)"
 export SLACK_BOT_TOKEN SLACK_TEST_USER="${SLACK_TEST_USER:-UXXXXXXXXXX}"
-GOMAXPROCS=2 nice -n 19 go test -tags slackapi ./internal/slack -run TestSlackParity -count=1 -v -timeout 30m
+GOMAXPROCS=2 nice -n 19 go test -tags slackapi ./internal/slack -run "${SLACK_PARITY_RUN:-TestSlackParity}" -count=1 -v -timeout 30m

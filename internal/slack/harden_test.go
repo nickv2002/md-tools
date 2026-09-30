@@ -361,3 +361,15 @@ func TestNestedSameStyleIsFlattened(t *testing.T) {
 		{"link keeps outer emphasis", "*[l](https://x.io)*", "_<https://x.io|l>_\n"},
 	})
 }
+
+func TestItalicEndingInPunctuationInsideASpan(t *testing.T) {
+	runCases(t, []struct{ name, input, want string }{
+		{"punctuation leaves the italic inside bold", "**_Note._**", "*_Note_.*\n"},
+		{"inside strikethrough", "~~_struck italic._~~", "~_struck italic_.~\n"},
+		{"quote leaves the italic", "**x _\"q\"_**", "*x _\"q_\"*\n"},
+		{"partial italic at the end of bold", "**b _c._**", "*b _c_.*\n"},
+		{"top-level italic keeps its punctuation", "_a._ x", "_a._ x\n"},
+		{"italic not last in its span is untouched", "**_a._ b**", "*_a._ b*\n"},
+		{"all-punctuation italic is untouched", "**_..._**", "*_..._*\n"},
+	})
+}

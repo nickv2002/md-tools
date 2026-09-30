@@ -135,8 +135,12 @@ func cells(in []run) []string {
 				continue
 			}
 			key := fmt.Sprintf("%c", ch)
-			if r.Bold || r.Italic || r.Strike || r.Code || r.URL != "" {
-				key += fmt.Sprintf("|%t%t%t%t|%s", r.Bold, r.Italic, r.Strike, r.Code, r.URL)
+			italic := r.Italic
+			if strings.ContainsRune(closingPunct, ch) && !r.Code {
+				italic = false // the converter leaves trailing punctuation outside an italic (see closingPunct)
+			}
+			if r.Bold || italic || r.Strike || r.Code || r.URL != "" {
+				key += fmt.Sprintf("|%t%t%t%t|%s", r.Bold, italic, r.Strike, r.Code, r.URL)
 			}
 			out = append(out, key)
 		}
@@ -236,6 +240,39 @@ var pileup = regexp.MustCompile(`\*{4,}|_{3,}|~{3,}|\*\*\*\*|~~~~`)
 
 var words = []string{"foo", "bar", "x", "y1", "日本", "重点", "snake_case", "a", "Bee", "2", "don't", "(paren)", "\"q\"", "end.", "a-b", "Go"}
 
+// genSentence builds prose with a few shallow spans, the shape real agent
+// output has: mostly plain words, spans separated by spaces or punctuation,
+// occasionally touching a word.
+func genSentence(r *rand.Rand) string {
+	var b strings.Builder
+	for i, n := 0, 3+r.Intn(6); i < n; i++ {
+		if i > 0 {
+			b.WriteString([]string{" ", " ", " ", ", ", ": "}[r.Intn(5)])
+		}
+		w := words[r.Intn(len(words))]
+		switch r.Intn(8) {
+		case 0:
+			b.WriteString("**" + w + "**")
+		case 1:
+			b.WriteString("*" + w + "*")
+		case 2:
+			b.WriteString("_" + w + "_")
+		case 3:
+			b.WriteString("~~" + w + "~~")
+		case 4:
+			b.WriteString("`" + w + "`")
+		case 5:
+			b.WriteString("[" + w + "](https://example.com/" + strconv.Itoa(r.Intn(9)) + ")")
+		case 6:
+			inner := words[r.Intn(len(words))]
+			b.WriteString([]string{"**" + w + " _" + inner + "_**", "**_" + w + "_**", "~~_" + w + "_~~", "~~**" + w + "**~~", "_**" + w + "**_", "**" + w + " _" + inner + "_**"}[r.Intn(6)])
+		default:
+			b.WriteString(w)
+		}
+	}
+	return b.String()
+}
+
 func genInline(r *rand.Rand, depth int) string {
 	n := 1 + r.Intn(3)
 	var b strings.Builder
@@ -270,6 +307,25 @@ func genInline(r *rand.Rand, depth int) string {
 	return b.String()
 }
 
+// TestSlackRawProbe posts SLACK_PARITY_RAW mrkdwn strings (separated by a line
+// containing @@) verbatim and logs the runs Slack parsed, for experiments.
+func TestSlackRawProbe(t *testing.T) {
+	raw := os.Getenv("SLACK_PARITY_RAW")
+	token, user := os.Getenv("SLACK_BOT_TOKEN"), os.Getenv("SLACK_TEST_USER")
+	if raw == "" || token == "" || user == "" {
+		t.Skip("set SLACK_PARITY_RAW, SLACK_BOT_TOKEN and SLACK_TEST_USER")
+	}
+	client := &slackClient{token: token, user: user}
+	for _, m := range strings.Split(raw, "\n@@\n") {
+		got, note, err := client.parse(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("PROBE %q => %v %s", m, got, note)
+		time.Sleep(1100 * time.Millisecond)
+	}
+}
+
 func TestSlackParity(t *testing.T) {
 	token := os.Getenv("SLACK_BOT_TOKEN")
 	user := os.Getenv("SLACK_TEST_USER")
@@ -292,7 +348,11 @@ func TestSlackParity(t *testing.T) {
 		inputs = strings.Split(one, "\n@@\n")
 	}
 	for os.Getenv("SLACK_PARITY_INPUT") == "" && len(inputs) < n {
-		inputs = append(inputs, genInline(rng, 2))
+		if os.Getenv("SLACK_PARITY_MODE") == "realistic" {
+			inputs = append(inputs, genSentence(rng))
+		} else {
+			inputs = append(inputs, genInline(rng, 2))
+		}
 	}
 
 	failures, checked := 0, 0
