@@ -26,7 +26,7 @@ The full contract (I/O, exit codes, escaping, link fallback, table rules) lives 
 ## Slack table rendering (learned by testing in real Slack)
 
 - Tables render inside a code fence with padded columns, ` | ` separators and a `---+---` header rule. Keep it ASCII: Unicode box-drawing glyphs (`│ ─ ┼`) come from a fallback font in Slack and their lines do not meet.
-- Cells are flattened to plain text (`plainText`) because Slack does not render mrkdwn in code blocks. Links become `label (url)`.
+- Cells are flattened to plain text (`plainText`) because Slack does not render mrkdwn in code blocks. Linkable links become `label [n]` with clickable `[n] <url|label>` footnotes under the block (chosen by the user from five layouts posted in Slack); unlinkable targets stay `label (target)`.
 - Width is computed in `displayWidth` per grapheme cluster: CJK and emoji-presentation characters are 2, combining marks and variation selectors are 0, and VS16, skin-tone, keycap, flag and ZWJ sequences collapse to one 2-cell glyph. Slack's fallback fonts draw some of these slightly narrower, so a one-cell wobble on CJK/❌ rows is expected and not fixable here.
 - The Slack MCP `slack_send_message` tool takes standard markdown and escapes `&` itself, so `&amp;` looks double-escaped in test DMs. That is a test artifact, not a renderer bug.
 - Verified in real Slack (Sep 2026): a zero-width space stops `_` and `~` from opening emphasis but NOT `*` or a backtick, so an escaped `\*` becomes `∗` (U+2217) and an escaped backtick becomes `ˋ`. Bold/italic/strike/code markers inside a `<url|label>` label show up literally, so the converter strips them there. `` ``` `` inside a code block is broken with a zero-width space so nested fences do not close the block.
