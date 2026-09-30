@@ -1,3 +1,4 @@
+import { CASE_FOLDING } from './casefold.js'
 // Byte-level helpers ported from goldmark's util package. The parser works on
 // UTF-8 bytes (Uint8Array), exactly as goldmark does, so offsets and ASCII
 // classification behave identically.
@@ -216,6 +217,13 @@ export function toLinkReference(v: Uint8Array): string {
   return out
 }
 
+/** DoFullUnicodeCaseFolding with goldmark's own table, so newer Unicode characters fold (or not) exactly as in the Go converter. */
 function foldCase(s: string): string {
-  return s.toLowerCase().toUpperCase().toLowerCase()
+  let out = ''
+  for (const ch of s) {
+    const cp = ch.codePointAt(0)!
+    if (cp < 0x80) out += cp >= 0x41 && cp <= 0x5a ? String.fromCharCode(cp + 32) : ch
+    else out += CASE_FOLDING.get(cp) ?? ch
+  }
+  return out
 }
