@@ -208,6 +208,13 @@ func TestMalformedInputNeverPanics(t *testing.T) {
 	}
 }
 
+// entityOut matches the only entities the converter emits; linkSyntax matches
+// a complete Slack link so its closing > is not mistaken for raw markup.
+var (
+	entityOut  = regexp.MustCompile(`^&(?:amp|lt|gt);`)
+	linkSyntax = regexp.MustCompile(`(?i)<(?:https?|mailto|tel|ftp):[^>\n]*>`)
+)
+
 // linkStart matches the start of a Slack link body: an allowed scheme and a
 // target with no whitespace before the pipe or closing bracket.
 var linkStart = regexp.MustCompile(`(?i)^(?:https?|mailto|tel|ftp):[^\s|>]+[|>]`)
@@ -240,6 +247,19 @@ func assertWellFormedWith(t testing.TB, in string, convert func([]byte) string) 
 		end := strings.IndexAny(rest, ">\n")
 		if end < 0 || rest[end] != '>' || !linkStart.MatchString(rest) {
 			t.Fatalf("unsafe < in output for %q: %q", in, got)
+		}
+	}
+	// Every & must start an entity the converter wrote, and outside link
+	// syntax a > may only be a leading quote marker, so nothing in the input can reach
+	// Slack as raw markup.
+	for i := 0; i < len(got); i++ {
+		if got[i] == '&' && !entityOut.MatchString(got[i:]) {
+			t.Fatalf("unescaped & in output for %q: %q", in, got)
+		}
+	}
+	for _, line := range strings.Split(linkSyntax.ReplaceAllString(got, ""), "\n") {
+		if strings.Contains(strings.TrimLeft(line, "> "), ">") {
+			t.Fatalf("raw > outside a link or quote marker for %q: %q", in, got)
 		}
 	}
 	if again := convert([]byte(in)); again != got {
