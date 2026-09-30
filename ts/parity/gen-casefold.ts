@@ -3,17 +3,31 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { repoRoot } from './golib.js'
 
-const dir = execFileSync('go', ['list', '-m', '-f', '{{.Dir}}', 'github.com/yuin/goldmark'], { cwd: repoRoot }).toString().trim()
+const dir = execFileSync(
+  'go',
+  ['list', '-m', '-f', '{{.Dir}}', 'github.com/yuin/goldmark'],
+  { cwd: repoRoot }
+)
+  .toString()
+  .trim()
 const src = readFileSync(`${dir}/util/unicode_case_folding.gen.go`, 'utf8')
 const list = (name: string): number[] => {
-  const m = new RegExp(`var ${name} = \\[\\.\\.\\.\\]\\w+\\{([^}]*)\\}`).exec(src)
+  const m = new RegExp(`var ${name} = \\[\\.\\.\\.\\]\\w+\\{([^}]*)\\}`).exec(
+    src
+  )
   if (!m) throw new Error(`missing ${name}`)
-  return m[1]!.split(',').map((x) => x.trim()).filter(Boolean).map((x) => Number(x))
+  return m[1]!
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => Number(x))
 }
 const from = list('_unicodeCaseFoldingFrom')
 const toIndexSrc = /var _unicodeCaseFoldingToIndex\s*=\s*"([^"]*)"/.exec(src)
 if (!toIndexSrc) throw new Error('missing _unicodeCaseFoldingToIndex')
-const toIndex = [...toIndexSrc[1]!.matchAll(/\\x([0-9a-f]{2})/g)].map((m) => parseInt(m[1]!, 16))
+const toIndex = [...toIndexSrc[1]!.matchAll(/\\x([0-9a-f]{2})/g)].map((m) =>
+  parseInt(m[1]!, 16)
+)
 const to = list('_unicodeCaseFoldingTo')
 const entries: Array<{ from: number; to: number[] }> = []
 let at = 0
@@ -25,13 +39,19 @@ from.forEach((f, i) => {
 // Runs of single-rune folds with a constant step and delta: [start, count, step, delta]; everything else is listed as [from, ...to].
 const runs: number[][] = []
 const rest: number[][] = []
-for (let i = 0; i < entries.length; ) {
+for (let i = 0; i < entries.length;) {
   const e = entries[i]!
   if (e.to.length === 1) {
     const delta = e.to[0]! - e.from
     let j = i + 1
     const step = j < entries.length ? entries[j]!.from - e.from : 0
-    while (j < entries.length && entries[j]!.to.length === 1 && entries[j]!.to[0]! - entries[j]!.from === delta && entries[j]!.from - entries[j - 1]!.from === step) j++
+    while (
+      j < entries.length &&
+      entries[j]!.to.length === 1 &&
+      entries[j]!.to[0]! - entries[j]!.from === delta &&
+      entries[j]!.from - entries[j - 1]!.from === step
+    )
+      j++
     if (j - i >= 4) {
       runs.push([e.from, j - i, step, delta])
       i = j
@@ -62,4 +82,6 @@ export const CASE_FOLDING: ReadonlyMap<number, string> = (() => {
 })()
 `
 writeFileSync(new URL('../src/goldmark/casefold.ts', import.meta.url), out)
-console.log(`entries ${entries.length}, runs ${runs.length}, others ${rest.length}, bytes ${out.length}`)
+console.log(
+  `entries ${entries.length}, runs ${runs.length}, others ${rest.length}, bytes ${out.length}`
+)

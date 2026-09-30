@@ -1,7 +1,28 @@
-import { GNode, type Alignment, type DelimiterProcessor, mergeOrAppendTextSegment, newRawText, walk } from './ast.js'
-import { type ASTTransformer, type InlineParser, type ParagraphTransformer, contextKey, scanDelimiter } from './parser.js'
+import {
+  GNode,
+  type Alignment,
+  type DelimiterProcessor,
+  mergeOrAppendTextSegment,
+  newRawText,
+  walk,
+} from './ast.js'
+import {
+  type ASTTransformer,
+  type InlineParser,
+  type ParagraphTransformer,
+  contextKey,
+  scanDelimiter,
+} from './parser.js'
 import { Segment } from './segment.js'
-import { findEmailIndex, indentWidth, isAlphaNumeric, isBlank, isPunct, isSpace, latin1 } from './util.js'
+import {
+  findEmailIndex,
+  indentWidth,
+  isAlphaNumeric,
+  isBlank,
+  isPunct,
+  isSpace,
+  latin1,
+} from './util.js'
 import { must } from '../must.js'
 
 // ---------- strikethrough ----------
@@ -28,7 +49,8 @@ export const strikethroughParser: InlineParser = {
 
 // ---------- task list checkbox ----------
 
-const isTaskSpace = (c: number): boolean => c === 0x20 || (c >= 0x09 && c <= 0x0d && c !== 0x0b)
+const isTaskSpace = (c: number): boolean =>
+  c === 0x20 || (c >= 0x09 && c <= 0x0d && c !== 0x0b)
 
 /** The length of a leading [ ], [x] or [X] and the white space after it, or 0 (goldmark's ^\[([\s xX])\]\s* regexp). */
 function taskBoxLength(line: Uint8Array): number {
@@ -43,7 +65,8 @@ function taskBoxLength(line: Uint8Array): number {
 export const taskCheckBoxParser: InlineParser = {
   trigger: [0x5b],
   parse(parent, block) {
-    if (parent.parent === null || parent.parent.firstChild !== parent) return null
+    if (parent.parent === null || parent.parent.firstChild !== parent)
+      return null
     if (parent.hasChildren()) return null
     if (parent.parent.kind !== 'ListItem') return null
     const [line] = block.peekLine()
@@ -59,12 +82,15 @@ export const taskCheckBoxParser: InlineParser = {
 
 // ---------- linkify ----------
 
-const wwwURLRegexp = /^www\.[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-z]+(?:[/#?][-a-zA-Z0-9@:%_+.~#!?&/=();,'">^{}[\]`]*)?/
-const urlRegexp = /^(?:http|https|ftp):\/\/[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-z]+(?::\d+)?(?:[/#?][-a-zA-Z0-9@:%_+.~#$!?&/=();,'">^{}[\]`]*)?/
+const wwwURLRegexp =
+  /^www\.[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-z]+(?:[/#?][-a-zA-Z0-9@:%_+.~#!?&/=();,'">^{}[\]`]*)?/
+const urlRegexp =
+  /^(?:http|https|ftp):\/\/[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-z]+(?::\d+)?(?:[/#?][-a-zA-Z0-9@:%_+.~#$!?&/=();,'">^{}[\]`]*)?/
 
 const hasPrefix = (line: Uint8Array, prefix: string): boolean => {
   if (line.length < prefix.length) return false
-  for (let i = 0; i < prefix.length; i++) if (line[i] !== prefix.charCodeAt(i)) return false
+  for (let i = 0; i < prefix.length; i++)
+    if (line[i] !== prefix.charCodeAt(i)) return false
   return true
 }
 
@@ -87,7 +113,11 @@ export const linkifyParser: InlineParser = {
     let m: [number, number] | null = null
     let protocol: Uint8Array | null = null
     let typ: 'email' | 'url' = 'url'
-    if (hasPrefix(line, 'http:') || hasPrefix(line, 'https:') || hasPrefix(line, 'ftp:')) {
+    if (
+      hasPrefix(line, 'http:') ||
+      hasPrefix(line, 'https:') ||
+      hasPrefix(line, 'ftp:')
+    ) {
       const r = urlRegexp.exec(latin1(line))
       if (r) m = [r.index, r.index + r[0].length]
     }
@@ -139,11 +169,22 @@ export const linkifyParser: InlineParser = {
     }
     void at
     void emailEnd
-    if (consumes !== 0) mergeOrAppendTextSegment(parent, segment.withStop(segment.start + 1))
+    if (consumes !== 0)
+      mergeOrAppendTextSegment(parent, segment.withStop(segment.start + 1))
     let i = m[1] - 1
     for (; i > 0; i--) {
       const ch = line[i]
-      if (ch === 0x3f || ch === 0x21 || ch === 0x2e || ch === 0x2c || ch === 0x3a || ch === 0x2a || ch === 0x5f || ch === 0x7e) continue
+      if (
+        ch === 0x3f ||
+        ch === 0x21 ||
+        ch === 0x2e ||
+        ch === 0x2c ||
+        ch === 0x3a ||
+        ch === 0x2a ||
+        ch === 0x5f ||
+        ch === 0x7e
+      )
+        continue
       break
     }
     i++
@@ -196,12 +237,16 @@ function splitBytes(line: Uint8Array, sep: number): Uint8Array[] {
   return out
 }
 
-function parseDelimiter(segment: Segment, source: Uint8Array): Alignment[] | null {
+function parseDelimiter(
+  segment: Segment,
+  source: Uint8Array
+): Alignment[] | null {
   const line = segment.value(source)
   if (!isTableDelim(line)) return null
   let cols = splitBytes(line, 0x7c)
   if (isBlank(cols[0])) cols = cols.slice(1)
-  if (cols.length > 0 && isBlank(cols[cols.length - 1])) cols = cols.slice(0, cols.length - 1)
+  if (cols.length > 0 && isBlank(cols[cols.length - 1]))
+    cols = cols.slice(0, cols.length - 1)
   const alignments: Alignment[] = []
   for (const col of cols) {
     const s = latin1(col)
@@ -218,7 +263,13 @@ function newTableCell(): GNode {
   return new GNode('TableCell')
 }
 
-function parseRow(segmentIn: Segment, alignments: Alignment[], isHeader: boolean, source: Uint8Array, pc: import('./parser.js').Context): GNode {
+function parseRow(
+  segmentIn: Segment,
+  alignments: Alignment[],
+  isHeader: boolean,
+  source: Uint8Array,
+  pc: import('./parser.js').Context
+): GNode {
   const segment = segmentIn.trimLeftSpace(source).trimRightSpace(source)
   const line = segment.value(source)
   let pos = 0
@@ -248,13 +299,18 @@ function parseRow(segmentIn: Segment, alignments: Alignment[], isHeader: boolean
         } else if (hasBacktick) {
           if (escapedCell === null) {
             escapedCell = { cell: node, pos: [], transformed: false }
-            pc.computeIfAbsent<EscapedPipeCell[]>(escapedPipeCellListKey, () => []).push(escapedCell)
+            pc.computeIfAbsent<EscapedPipeCell[]>(
+              escapedPipeCellListKey,
+              () => []
+            ).push(escapedCell)
           }
           escapedCell.pos.push(segment.start + closure - 1)
         }
       }
     }
-    const seg = new Segment(segment.start + pos, segment.start + closure).trimLeftSpace(source).trimRightSpace(source)
+    const seg = new Segment(segment.start + pos, segment.start + closure)
+      .trimLeftSpace(source)
+      .trimRightSpace(source)
     node.lines.append(seg)
     row.appendChild(node)
     pos = closure + 1
@@ -277,13 +333,14 @@ export const tableParagraphTransformer: ParagraphTransformer = {
       table.alignments = alignments
       const th = new GNode('TableHeader')
       th.alignments = header.alignments
-      for (let c = header.firstChild; c !== null; ) {
+      for (let c = header.firstChild; c !== null;) {
         const next: GNode | null = c.next
         th.appendChild(c)
         c = next
       }
       table.appendChild(th)
-      for (let j = i + 1; j < lines.length; j++) table.appendChild(parseRow(lines.at(j), alignments, false, source, pc))
+      for (let j = i + 1; j < lines.length; j++)
+        table.appendChild(parseRow(lines.at(j), alignments, false, source, pc))
       node.lines.setSliced(0, i - 1)
       must(node.parent).insertAfter(node, table)
       if (node.lines.length === 0) {
@@ -305,7 +362,7 @@ export const tableASTTransformer: ASTTransformer = {
       if (v.transformed) continue
       walk(v.cell, (n, entering) => {
         if (!entering || n.kind !== 'CodeSpan') return 'continue'
-        for (let c = n.firstChild; c !== null; ) {
+        for (let c = n.firstChild; c !== null;) {
           const next: GNode | null = c.next
           if (c.kind !== 'Text') {
             c = next

@@ -1,11 +1,20 @@
 import { GNode, mergeOrReplaceTextSegment, newText } from './ast.js'
-import { type InlineParser, type Context, linkLabelStateKey, processDelimiters } from './parser.js'
+import {
+  type InlineParser,
+  type Context,
+  linkLabelStateKey,
+  processDelimiters,
+} from './parser.js'
 import type { FindClosureOptions, TextReader } from './reader.js'
 import { Segment } from './segment.js'
 import { isBlank, isPunct, isSpace, toLinkReference } from './util.js'
 import { must } from '../must.js'
 
-export const LINK_FIND_CLOSURE_OPTIONS: FindClosureOptions = { nesting: false, newline: true, advance: true }
+export const LINK_FIND_CLOSURE_OPTIONS: FindClosureOptions = {
+  nesting: false,
+  newline: true,
+  advance: true,
+}
 
 function newLinkLabelState(segment: Segment, isImage: boolean): GNode {
   const s = new GNode('LinkLabelState')
@@ -76,7 +85,12 @@ function containsLink(n: GNode | null): boolean {
   return false
 }
 
-function processLinkLabelOpen(block: TextReader, pos: number, isImage: boolean, pc: Context): GNode {
+function processLinkLabelOpen(
+  block: TextReader,
+  pos: number,
+  isImage: boolean,
+  pc: Context
+): GNode {
   let start = pos
   if (isImage) start--
   const state = newLinkLabelState(new Segment(start, pos + 1), isImage)
@@ -85,10 +99,15 @@ function processLinkLabelOpen(block: TextReader, pos: number, isImage: boolean, 
   return state
 }
 
-function processLinkLabel(parent: GNode, link: GNode, last: GNode, pc: Context): void {
+function processLinkLabel(
+  parent: GNode,
+  link: GNode,
+  last: GNode,
+  pc: Context
+): void {
   const bottom = popLinkBottom(pc)
   processDelimiters(bottom, pc)
-  for (let c = last.next; c !== null; ) {
+  for (let c = last.next; c !== null;) {
     const next: GNode | null = c.next
     parent.removeChild(c)
     link.appendChild(c)
@@ -96,9 +115,13 @@ function processLinkLabel(parent: GNode, link: GNode, last: GNode, pc: Context):
   }
 }
 
-function concatSegments(block: TextReader, segments: { length: number; at(i: number): Segment }): Uint8Array {
+function concatSegments(
+  block: TextReader,
+  segments: { length: number; at(i: number): Segment }
+): Uint8Array {
   const parts: Uint8Array[] = []
-  for (let i = 0; i < segments.length; i++) parts.push(block.value(segments.at(i)))
+  for (let i = 0; i < segments.length; i++)
+    parts.push(block.value(segments.at(i)))
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
   let at = 0
   for (const p of parts) {
@@ -108,7 +131,9 @@ function concatSegments(block: TextReader, segments: { length: number; at(i: num
   return out
 }
 
-export function parseLinkDestination(block: TextReader): [Uint8Array | null, boolean] {
+export function parseLinkDestination(
+  block: TextReader
+): [Uint8Array | null, boolean] {
   block.skipSpaces()
   const [line0] = block.peekLine()
   const line = line0 ?? new Uint8Array(0)
@@ -151,10 +176,15 @@ export function parseLinkDestination(block: TextReader): [Uint8Array | null, boo
 function parseLinkTitle(block: TextReader): [Uint8Array | null, boolean] {
   block.skipSpaces()
   const opener = block.peek()
-  if (opener !== 0x22 && opener !== 0x27 && opener !== 0x28) return [null, false]
+  if (opener !== 0x22 && opener !== 0x27 && opener !== 0x28)
+    return [null, false]
   const closer = opener === 0x28 ? 0x29 : opener
   block.advance(1)
-  const [segments, found] = block.findClosure(opener, closer, LINK_FIND_CLOSURE_OPTIONS)
+  const [segments, found] = block.findClosure(
+    opener,
+    closer,
+    LINK_FIND_CLOSURE_OPTIONS
+  )
   if (found) return [concatSegments(block, must(segments)), true]
   return [null, false]
 }
@@ -163,15 +193,26 @@ function newLink(): GNode {
   return new GNode('Link')
 }
 
-function parseReferenceLink(parent: GNode, last: GNode, block: TextReader, pc: Context): [GNode | null, boolean] {
+function parseReferenceLink(
+  parent: GNode,
+  last: GNode,
+  block: TextReader,
+  pc: Context
+): [GNode | null, boolean] {
   const [, orgpos] = block.position()
   block.advance(1) // skip '['
-  const [segments, found] = block.findClosure(0x5b, 0x5d, LINK_FIND_CLOSURE_OPTIONS)
+  const [segments, found] = block.findClosure(
+    0x5b,
+    0x5d,
+    LINK_FIND_CLOSURE_OPTIONS
+  )
   if (!found) return [null, false]
   let maybeReference = concatSegments(block, must(segments))
   if (isBlank(maybeReference)) {
     // collapsed reference link
-    maybeReference = block.value(new Segment(last.segment.stop, orgpos.start - 1))
+    maybeReference = block.value(
+      new Segment(last.segment.stop, orgpos.start - 1)
+    )
   }
   if (maybeReference.length > 999) return [null, true]
   const ref = pc.reference(toLinkReference(maybeReference))
@@ -183,7 +224,12 @@ function parseReferenceLink(parent: GNode, last: GNode, block: TextReader, pc: C
   return [link, true]
 }
 
-function parseLink(parent: GNode, last: GNode, block: TextReader, pc: Context): GNode | null {
+function parseLink(
+  parent: GNode,
+  last: GNode,
+  block: TextReader,
+  pc: Context
+): GNode | null {
   block.advance(1) // skip '('
   block.skipSpaces()
   let title: Uint8Array | null = null
@@ -217,7 +263,7 @@ function newImage(link: GNode): GNode {
   const c = new GNode('Image')
   c.destination = link.destination
   c.title = link.title
-  for (let n = link.firstChild; n !== null; ) {
+  for (let n = link.firstChild; n !== null;) {
     const next: GNode | null = n.next
     link.removeChild(n)
     c.appendChild(n)
@@ -315,7 +361,7 @@ export const linkParser: InlineParser = {
     pc.linkBottoms = []
     const tlist = pc.get<GNode>(linkLabelStateKey)
     if (tlist === undefined) return
-    for (let s: GNode | null = tlist; s !== null; ) {
+    for (let s: GNode | null = tlist; s !== null;) {
       const next: GNode | null = s.labelNext
       removeLinkLabelState(pc, s)
       must(s.parent).replaceChild(s, newText(s.segment))

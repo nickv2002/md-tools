@@ -8,7 +8,8 @@ const to = Number(process.argv[3] ?? 0x110000)
 
 const shapes: Array<(c: string) => string> = [
   (c) => `| h |\n|---|\n| ${c} |\n| a${c}b |`,
-  (c) => `| h |\n|:-:|\n| ${c}️ |\n| ${c}\u200d${c} |\n| ${c}́ |\n| ${c}︎ |\n| ${c}\u{1f3fd} |`,
+  (c) =>
+    `| h |\n|:-:|\n| ${c}️ |\n| ${c}\u200d${c} |\n| ${c}́ |\n| ${c}︎ |\n| ${c}\u{1f3fd} |`,
   (c) => `${c}**b**`,
   (c) => `**b**${c}`,
   (c) => `${c}_b_${c}`,
@@ -36,10 +37,19 @@ async function main() {
       const got = markdownToSlackMrkdwn(inputs[i]!, { maxTableWidth: 0 })
       if (got !== r.out) {
         bad++
-        if (bad <= 15) console.log('DIFF', JSON.stringify(inputs[i]), '\n  go', JSON.stringify(r.out), '\n  ts', JSON.stringify(got))
+        if (bad <= 15)
+          console.log(
+            'DIFF',
+            JSON.stringify(inputs[i]),
+            '\n  go',
+            JSON.stringify(r.out),
+            '\n  ts',
+            JSON.stringify(got)
+          )
       }
     })
-    if (start % (CHUNK * 10) === 0) console.log(`... U+${start.toString(16)} ${bad} diffs so far`)
+    if (start % (CHUNK * 10) === 0)
+      console.log(`... U+${start.toString(16)} ${bad} diffs so far`)
   }
   console.log(`exhaustive: ${bad} / ${total} differ`)
 }

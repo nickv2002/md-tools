@@ -5,14 +5,22 @@ import { generate } from './gen.js'
 const time = (label: string, input: string): void => {
   const t = performance.now()
   const out = markdownToSlackMrkdwn(input)
-  console.log(`${label}: ${input.length} chars in ${(performance.now() - t).toFixed(0)}ms (${out.length} out)`)
+  console.log(
+    `${label}: ${input.length} chars in ${(performance.now() - t).toFixed(0)}ms (${out.length} out)`
+  )
 }
 const docs = generate(5, 300).join('\n\n')
 time('mixed 3000 generated docs', docs)
 time('long paragraph', 'word *em* `code` [l](https://x.io) '.repeat(2000))
-time('many lines', Array.from({ length: 2000 }, (_, i) => `line ${i} **b** _i_`).join('\n'))
+time(
+  'many lines',
+  Array.from({ length: 2000 }, (_, i) => `line ${i} **b** _i_`).join('\n')
+)
 time('deep quote', '> '.repeat(50) + 'x')
-time('deep list', Array.from({ length: 100 }, (_, i) => '  '.repeat(i) + '- x').join('\n'))
+time(
+  'deep list',
+  Array.from({ length: 100 }, (_, i) => '  '.repeat(i) + '- x').join('\n')
+)
 time('many brackets', '['.repeat(2000) + ']'.repeat(2000))
 time('many stars', '*'.repeat(2000))
 time('many stars alternating', '*a'.repeat(2000))

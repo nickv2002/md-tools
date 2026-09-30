@@ -5,26 +5,103 @@ import { buildGo, runGo } from './golib.js'
 import { markdownToSlackMrkdwn } from '../src/index.js'
 import { mulberry32 } from './gen.js'
 
-const INLINE = ['*', '**', '_', '__', '~', '~~', '`', '``', '[', ']', '(', ')', '<', '>', '!', 'a', ' ', '\n', '\\', '&', ';', '|', 'http://x.io', 'www.x.io', 'a@b.co', '&amp;', '.', ':']
-const BLOCK = ['#', '-', '+', '*', '1.', '2)', '>', ' ', '  ', '\t', '\n', '\n\n', 'a', '=', '---', '|', ':', '```', '~~~', '    ', '[x]', '[ ]', '<div>', '</div>', '<!--', '-->', '[r]: u', '"t"', '<br>', '`x`', '[r]']
+const INLINE = [
+  '*',
+  '**',
+  '_',
+  '__',
+  '~',
+  '~~',
+  '`',
+  '``',
+  '[',
+  ']',
+  '(',
+  ')',
+  '<',
+  '>',
+  '!',
+  'a',
+  ' ',
+  '\n',
+  '\\',
+  '&',
+  ';',
+  '|',
+  'http://x.io',
+  'www.x.io',
+  'a@b.co',
+  '&amp;',
+  '.',
+  ':',
+]
+const BLOCK = [
+  '#',
+  '-',
+  '+',
+  '*',
+  '1.',
+  '2)',
+  '>',
+  ' ',
+  '  ',
+  '\t',
+  '\n',
+  '\n\n',
+  'a',
+  '=',
+  '---',
+  '|',
+  ':',
+  '```',
+  '~~~',
+  '    ',
+  '[x]',
+  '[ ]',
+  '<div>',
+  '</div>',
+  '<!--',
+  '-->',
+  '[r]: u',
+  '"t"',
+  '<br>',
+  '`x`',
+  '[r]',
+]
 const maxLen = Number(process.argv[2] ?? 4)
 const randomCount = Number(process.argv[3] ?? 1000000)
 
 let bad = 0
 let total = 0
-async function check(label: string, inputs: string[], width?: number): Promise<void> {
+async function check(
+  label: string,
+  inputs: string[],
+  width?: number
+): Promise<void> {
   const results = await runGo(inputs.map((input) => ({ input, width })))
   results.forEach((r, i) => {
     total++
     let got: string
     try {
-      got = markdownToSlackMrkdwn(inputs[i]!, width === undefined ? {} : { maxTableWidth: width })
+      got = markdownToSlackMrkdwn(
+        inputs[i]!,
+        width === undefined ? {} : { maxTableWidth: width }
+      )
     } catch (e) {
       got = `THROW ${(e as Error).message}`
     }
     if (got !== r.out) {
       bad++
-      if (bad <= 20) console.log(label, 'DIFF', JSON.stringify(inputs[i]), '\n  go', JSON.stringify(r.out), '\n  ts', JSON.stringify(got))
+      if (bad <= 20)
+        console.log(
+          label,
+          'DIFF',
+          JSON.stringify(inputs[i]),
+          '\n  go',
+          JSON.stringify(r.out),
+          '\n  ts',
+          JSON.stringify(got)
+        )
     }
   })
 }
@@ -46,10 +123,16 @@ async function exhaustive(label: string, alphabet: string[]): Promise<void> {
   }
   await rec('', 0)
   await flush()
-  console.log(`${label}: exhaustive up to ${maxLen} tokens done, ${bad} diffs so far, ${total} checked`)
+  console.log(
+    `${label}: exhaustive up to ${maxLen} tokens done, ${bad} diffs so far, ${total} checked`
+  )
 }
 
-async function random(label: string, alphabet: string[], seed: number): Promise<void> {
+async function random(
+  label: string,
+  alphabet: string[],
+  seed: number
+): Promise<void> {
   const r = mulberry32(seed)
   const CHUNK = 50000
   for (let done = 0; done < randomCount; done += CHUNK) {
@@ -57,12 +140,15 @@ async function random(label: string, alphabet: string[], seed: number): Promise<
     for (let i = 0; i < CHUNK; i++) {
       const len = 5 + Math.floor(r() * 10)
       let s = ''
-      for (let k = 0; k < len; k++) s += alphabet[Math.floor(r() * alphabet.length)]
+      for (let k = 0; k < len; k++)
+        s += alphabet[Math.floor(r() * alphabet.length)]
       batch.push(s)
     }
     await check(label, batch, [undefined, 0, 12][Math.floor(r() * 3)])
   }
-  console.log(`${label}: ${randomCount} random sequences done, ${bad} diffs so far, ${total} checked`)
+  console.log(
+    `${label}: ${randomCount} random sequences done, ${bad} diffs so far, ${total} checked`
+  )
 }
 
 async function main() {

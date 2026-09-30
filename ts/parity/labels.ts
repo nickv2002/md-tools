@@ -8,12 +8,31 @@ async function main() {
   for (let cp = 0x20; cp < 0x110000; cp++) {
     if (cp >= 0xd800 && cp <= 0xdfff) continue
     const c = String.fromCodePoint(cp)
-    for (const variant of new Set([c.toUpperCase(), c.toLowerCase(), c.toUpperCase().toLowerCase(), c.toLowerCase().toUpperCase()])) {
+    for (const variant of new Set([
+      c.toUpperCase(),
+      c.toLowerCase(),
+      c.toUpperCase().toLowerCase(),
+      c.toLowerCase().toUpperCase(),
+    ])) {
       if (variant === c) continue
-      inputs.push(`[x${c}y]: https://x.io/a\n\n[X${variant}Y] [x${c}y][] [x${variant}y]`)
+      inputs.push(
+        `[x${c}y]: https://x.io/a\n\n[X${variant}Y] [x${c}y][] [x${variant}y]`
+      )
     }
   }
-  for (const [a, b] of [['ß', 'SS'], ['ẞ', 'ss'], ['ß', 'ẞ'], ['İ', 'i̇'], ['ǅ', 'ǆ'], ['ς', 'Σ'], ['ﬁ', 'FI'], ['ŉ', 'ʼN'], ['ǰ', 'J̌'], ['ΐ', 'ΐ']]) inputs.push(`[${a}]: /u\n\n[${b}]`)
+  for (const [a, b] of [
+    ['ß', 'SS'],
+    ['ẞ', 'ss'],
+    ['ß', 'ẞ'],
+    ['İ', 'i̇'],
+    ['ǅ', 'ǆ'],
+    ['ς', 'Σ'],
+    ['ﬁ', 'FI'],
+    ['ŉ', 'ʼN'],
+    ['ǰ', 'J̌'],
+    ['ΐ', 'ΐ'],
+  ])
+    inputs.push(`[${a}]: /u\n\n[${b}]`)
   let bad = 0
   const CHUNK = 20000
   for (let i = 0; i < inputs.length; i += CHUNK) {
@@ -23,7 +42,15 @@ async function main() {
       const got = markdownToSlackMrkdwn(slice[j]!)
       if (got !== r.out) {
         bad++
-        if (bad <= 12) console.log('DIFF', JSON.stringify(slice[j]), '\n  go', JSON.stringify(r.out), '\n  ts', JSON.stringify(got))
+        if (bad <= 12)
+          console.log(
+            'DIFF',
+            JSON.stringify(slice[j]),
+            '\n  go',
+            JSON.stringify(r.out),
+            '\n  ts',
+            JSON.stringify(got)
+          )
       }
     })
   }
