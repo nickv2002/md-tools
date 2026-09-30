@@ -1,16 +1,21 @@
 import { decodeNamedCharacterReference } from 'decode-named-character-reference'
+import { decodeRune } from './goldmark/util.js'
 
 // Go's unicode.IsSpace set. JavaScript's \s and trim() also match U+FEFF, which Go keeps.
 const SPACE_CLASS = '\\t-\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000'
 const SPACE_RUN = new RegExp(`[${SPACE_CLASS}]+`, 'u')
-const LEADING_SPACE = new RegExp(`^[${SPACE_CLASS}]+`, 'u')
-const TRAILING_SPACE = new RegExp(`[${SPACE_CLASS}]+$`, 'u')
 
 export const isSpace = (cp: number): boolean =>
   (cp >= 0x09 && cp <= 0x0d) || cp === 0x20 || cp === 0x85 || cp === 0xa0 || cp === 0x1680 || (cp >= 0x2000 && cp <= 0x200a) ||
   cp === 0x2028 || cp === 0x2029 || cp === 0x202f || cp === 0x205f || cp === 0x3000
 
-export const trimSpace = (s: string): string => s.replace(LEADING_SPACE, '').replace(TRAILING_SPACE, '')
+export function trimSpace(s: string): string {
+  let start = 0
+  let end = s.length
+  while (start < end && isSpace(s.charCodeAt(start))) start++
+  while (end > start && isSpace(s.charCodeAt(end - 1))) end--
+  return s.slice(start, end)
+}
 
 /** strings.Fields: split on Unicode white space, dropping empty fields. */
 export const fields = (s: string): string[] => s.split(SPACE_RUN).filter((f) => f !== '')
@@ -117,5 +122,37 @@ export function unescapeText(s: string, neutralize: boolean): string {
     out += c
     i++
   }
+  return out
+}
+
+/**
+ * Decodes UTF-8 bytes the way the Go converter prepares its input
+ * (strings.ToValidUTF8(s, "\ufffd")): each run of invalid bytes becomes one
+ * U+FFFD, and a U+FFFD that was really in the input stays.
+ */
+export function decodeUtf8Lossy(bytes: Uint8Array): string {
+  let out = ''
+  let runStart = 0
+  let i = 0
+  let invalidRun = false
+  const flush = (end: number): void => {
+    if (end > runStart) out += new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes.subarray(runStart, end))
+  }
+  while (i < bytes.length) {
+    const [r, size] = decodeRune(bytes, i)
+    if (r === 0xfffd && size === 1) {
+      if (!invalidRun) {
+        flush(i)
+        out += '\ufffd'
+        invalidRun = true
+      }
+      i++
+      runStart = i
+    } else {
+      invalidRun = false
+      i += size
+    }
+  }
+  flush(i)
   return out
 }
