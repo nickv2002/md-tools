@@ -332,3 +332,16 @@ func TestDefaultTableWidthThreshold(t *testing.T) {
 		t.Errorf("width one over the limit should become records: %q", got)
 	}
 }
+
+func TestEmphasisSlackWillNotFormat(t *testing.T) {
+	runCases(t, []struct{ name, input, want string }{
+		{"blank emphasis disappears", "a _<span></span>_ b", "a  b\n"},
+		{"bold around a fallback image", "a **![](i.png)** b", "a *image (i.png)* b\n"},
+		{"soft break inside emphasis is a space", "*a\nb*", "_a b_\n"},
+		{"hard break splits the pair per line", "*a  \nb* c", "_a_\n_b_ c\n"},
+		{"backslash hard break splits bold", "**a\\\nb**", "*a*\n*b*\n"},
+		{"strikethrough across hard break", "~~a  \nb~~", "~a~\n~b~\n"},
+		{"edge whitespace moves outside the markers", "a *<br>b<br>* c", "a \n_b_\n c\n"},
+		{"nested emphasis keeps working", "***a** b*", "_*a* b_\n"},
+	})
+}
