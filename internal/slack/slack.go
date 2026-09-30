@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -461,6 +462,14 @@ func renderList(n *ast.List, source []byte, depth, maxTable int) string {
 // plainText flattens inline nodes to unformatted text. Slack does not render
 // mrkdwn inside code blocks, so markup would otherwise show up literally.
 func plainText(node ast.Node, source []byte) string {
+	return plainTextWith(node, source, nil)
+}
+
+// linkNoter is called for each linkable link in a table cell and returns the
+// marker to print in the cell in place of the URL ("" keeps the label (url) form).
+type linkNoter func(n ast.Node, dest string) string
+
+func plainTextWith(node ast.Node, source []byte, note linkNoter) string {
 	var b strings.Builder
 	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
 		switch n := child.(type) {
@@ -478,17 +487,37 @@ func plainText(node ast.Node, source []byte) string {
 				}
 			}
 		case *ast.Link:
-			label := strings.TrimSpace(plainText(n, source))
+			label := strings.TrimSpace(plainTextWith(n, source, nil))
 			url := strings.TrimSpace(unescapeText(string(n.Destination), false))
-			if label == "" || label == url {
+			marker := ""
+			if note != nil {
+				marker = note(n, url)
+			}
+			switch {
+			case marker != "" && (label == "" || label == url):
+				b.WriteString(marker)
+			case marker != "":
+				b.WriteString(label + " " + marker)
+			case label == "" || label == url:
 				b.WriteString(url)
-			} else {
+			default:
 				b.WriteString(label + " (" + url + ")")
 			}
 		case *ast.AutoLink:
-			b.Write(n.URL(source))
+			url := string(n.URL(source))
+			if note != nil {
+				dest := url
+				if n.AutoLinkType == ast.AutoLinkEmail {
+					dest = "mailto:" + url
+				}
+				if marker := note(n, dest); marker != "" {
+					b.WriteString(url + " " + marker)
+					continue
+				}
+			}
+			b.WriteString(url)
 		case *ast.Image:
-			b.WriteString(strings.TrimSpace(plainText(n, source)))
+			b.WriteString(strings.TrimSpace(plainTextWith(n, source, nil)))
 		case *extast.TaskCheckBox:
 			if n.IsChecked {
 				b.WriteString("[x] ")
@@ -500,7 +529,7 @@ func plainText(node ast.Node, source []byte) string {
 				b.WriteByte(' ')
 			}
 		default:
-			b.WriteString(plainText(child, source))
+			b.WriteString(plainTextWith(child, source, note))
 		}
 	}
 	return strings.Join(strings.Fields(b.String()), " ")
@@ -618,13 +647,36 @@ func pad(s string, width int, align extast.Alignment) string {
 // box characters are used: Slack draws Unicode box-drawing glyphs from a
 // fallback font whose lines do not meet.
 func renderTable(n *extast.Table, source []byte, maxTable int) string {
+	// A grid sits in a code block, where Slack cannot link anything, so each
+	// linkable link becomes a numbered marker and gets a clickable footnote
+	// under the block.
+	var notes []tableNote
+	var row0, col0 int
+	noter := func(n ast.Node, dest string) string {
+		target, ok := linkTarget(dest)
+		if !ok {
+			return ""
+		}
+		note := tableNote{dest: target, row: row0, col: col0}
+		switch l := n.(type) {
+		case *ast.Link:
+			note.label = strings.Join(strings.Fields(childrenInline(l, source, inlineCtx{link: true})), " ")
+		case *ast.AutoLink:
+			note.label = escape(string(l.URL(source)))
+		}
+		notes = append(notes, note)
+		return "[" + strconv.Itoa(len(notes)) + "]"
+	}
 	var grid [][]string
 	for row := n.FirstChild(); row != nil; row = row.NextSibling() {
 		var cells []string
+		col0 = 0
 		for cell := row.FirstChild(); cell != nil; cell = cell.NextSibling() {
-			cells = append(cells, plainText(cell, source))
+			cells = append(cells, plainTextWith(cell, source, noter))
+			col0++
 		}
 		grid = append(grid, cells)
+		row0++
 	}
 	cols := len(n.Alignments)
 	for _, cells := range grid {
@@ -678,7 +730,34 @@ func renderTable(n *extast.Table, source []byte, maxTable int) string {
 			out = append(out, strings.Join(rule, "-+-"))
 		}
 	}
-	return "```\n" + fenceSafe(strings.Join(out, "\n")) + "\n```"
+	return "```\n" + fenceSafe(strings.Join(out, "\n")) + "\n```" + tableFootnotes(notes, grid)
+}
+
+type tableNote struct {
+	label, dest string
+	row, col    int
+}
+
+// tableFootnotes lists each numbered table link as a clickable line. When two
+// links share a label ("runbook"), a link outside the first column is
+// prefixed with its row's first cell so the footnotes stay distinguishable.
+func tableFootnotes(notes []tableNote, grid [][]string) string {
+	if len(notes) == 0 {
+		return ""
+	}
+	count := map[string]int{}
+	for _, note := range notes {
+		count[note.label]++
+	}
+	var b strings.Builder
+	for i, note := range notes {
+		label := note.label
+		if count[label] > 1 && note.col > 0 && note.row < len(grid) && len(grid[note.row]) > 0 && grid[note.row][0] != "" {
+			label = escape(grid[note.row][0]) + " " + label
+		}
+		b.WriteString("\n[" + strconv.Itoa(i+1) + "] " + slackLink(note.dest, label))
+	}
+	return b.String()
 }
 
 // gridWidth is the display width of a table grid with the given column widths.

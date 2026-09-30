@@ -121,7 +121,7 @@ func TestTableNormalization(t *testing.T) {
 		{"br makes multiline cell one line", "| A |\n|---|\n| a<br>b<br/>c |", "```\nA\n-----\na b c\n```\n"},
 		{"escaped pipe", "| A |\n|---|\n| a\\|b |", "```\nA\n---\na|b\n```\n"},
 		{"trailing pipe in last cell kept", "| A | B |\n|---|---|\n| x | a\\| |", "```\nA | B\n--+---\nx | a|\n```\n"},
-		{"flattening", "| A |\n|---|\n| **b** _i_ ~~s~~ ![img](x.png) [l](https://x.io) &copy; &lt;t&gt; [x] |", "```\nA\n" + strings.Repeat("-", 36) + "\nb i s img l (https://x.io) © &lt;t&gt; [x]\n```\n"},
+		{"flattening", "| A |\n|---|\n| **b** _i_ ~~s~~ ![img](x.png) [l](https://x.io) &copy; &lt;t&gt; [x] |", "```\nA\n" + strings.Repeat("-", 25) + "\nb i s img l [1] © &lt;t&gt; [x]\n```\n[1] <https://x.io|l>\n"},
 		{"task checkbox", "| A |\n|---|\n| - [ ] x |", "```\nA\n-------\n- [ ] x\n```\n"},
 		{"fence marker in cell", "| A |\n|---|\n| ``` |", "```\nA\n---\n``​`\n```\n"},
 	})
@@ -266,17 +266,41 @@ func TestTableCellFlatteningKinds(t *testing.T) {
 	in := "| A |\n|---|\n" +
 		"| <https://x.io/a> <a@b.co> www.x.io |\n" +
 		"| [](https://x.io) [https://y.io](https://y.io) |\n" +
-		"| **_nested_ `code <b>`** ![](i.png) |\n" +
+		"| **_nested_** `code <b>` ![](i.png) |\n" +
 		"| a<br>b |\n"
 	got := Convert([]byte(in))
-	for _, want := range []string{"https://x.io/a a@b.co http://www.x.io", "https://x.io https://y.io", "nested code <b>", "a b"} {
-		if !strings.Contains(strings.NewReplacer("&lt;", "<", "&gt;", ">").Replace(got), want) {
+	for _, want := range []string{
+		"https://x.io/a [1] a@b.co [2] http://www.x.io [3]",
+		"[4] [5]",
+		"nested code &lt;b&gt;",
+		"a b",
+		"[1] <https://x.io/a>",
+		"[2] <mailto:a@b.co|a@b.co>",
+		"[3] <http://www.x.io>",
+		"[4] <https://x.io>",
+		"[5] <https://y.io>",
+	} {
+		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in\n%s", want, got)
 		}
 	}
-	if strings.ContainsAny(got, "*_~") {
-		t.Errorf("markup leaked into table:\n%s", got)
+	if grid := got[:strings.LastIndex(got, "```")]; strings.ContainsAny(grid, "*_~") {
+		t.Errorf("markup leaked into the grid:\n%s", grid)
 	}
+}
+
+func TestTableLinksBecomeFootnotes(t *testing.T) {
+	runCases(t, []struct{ name, input, want string }{
+		{"labels stay in the cell, links go underneath", "| S | Runbook |\n|---|---|\n| api | [runbook](https://x.io/a) |\n| db | [runbook](https://x.io/b) |",
+			"```\nS   | Runbook\n----+------------\napi | runbook [1]\ndb  | runbook [2]\n```\n[1] <https://x.io/a|api runbook>\n[2] <https://x.io/b|db runbook>\n"},
+		{"distinct labels are kept as they are", "| S | Doc |\n|---|---|\n| api | [guide](https://x.io/a) |\n| db | [spec](https://x.io/b) |",
+			"```\nS   | Doc\n----+----------\napi | guide [1]\ndb  | spec [2]\n```\n[1] <https://x.io/a|guide>\n[2] <https://x.io/b|spec>\n"},
+		{"a link in the first column keeps its own label", "| S |\n|---|\n| [api](https://x.io/a) |\n| [db](https://x.io/b) |",
+			"```\nS\n-------\napi [1]\ndb [2]\n```\n[1] <https://x.io/a|api>\n[2] <https://x.io/b|db>\n"},
+		{"unlinkable targets stay label (url) with no footnote", "| S |\n|---|\n| [rel](/docs/a.md) |", "```\nS\n----------------\nrel (/docs/a.md)\n```\n"},
+		{"a table without links has no footnotes", "| S |\n|---|\n| a |", "```\nS\n-\na\n```\n"},
+		{"markup in a footnote label is neutralized", "| S | L |\n|---|---|\n| a | [**b**\\*](https://x.io) |", "```\nS | L\n--+-------\na | b* [1]\n```\n[1] <https://x.io|b∗>\n"},
+	})
 }
 
 func TestEmphasisTouchingWordsGetsHairSpace(t *testing.T) {
