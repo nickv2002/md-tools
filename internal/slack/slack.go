@@ -154,7 +154,7 @@ func linkTarget(dest string) (target string, ok bool) {
 // slackLink renders <url|label>, or label (url) when Slack cannot represent
 // the link: an unlinkable destination or a label holding the | separator.
 func slackLink(dest, label string) string {
-	label = strings.Join(strings.Fields(label), " ")
+	label = collapseSpace(label)
 	target, ok := linkTarget(dest)
 	switch {
 	case target == "":
@@ -185,7 +185,29 @@ func fenceSafe(s string) string {
 // chat.postMessage API).
 const hairSpace = "\u200a"
 
-func touchesWord(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r) }
+// Slack opens a span only after whitespace or one of openOK and closes it only
+// before whitespace or one of closeOK (measured through chat.postMessage by
+// probing every ASCII punctuation mark, typographic quotes, CJK punctuation and
+// letters). Everything else, including letters, digits, CJK text, fullwidth
+// punctuation, ) ] } ' \ | @ and &, is not a boundary. A code span also opens
+// after a backslash or another marker.
+const (
+	openOK  = `([{".,;:!?-/#$%^+=—…“”‘’`
+	closeOK = `)[]{}".,;:!?-/#$%^+=—…“”‘’`
+)
+
+// collapseSpace folds runs of ASCII whitespace to one space. strings.Fields
+// would also split on the hair space, turning the gap Slack needs into a
+// visible space.
+func collapseSpace(s string) string {
+	return strings.Join(strings.FieldsFunc(s, func(r rune) bool { return r == ' ' || r == '\t' || r == '\n' || r == '\r' }), " ")
+}
+
+func opensAfter(r rune, code bool) bool {
+	return unicode.IsSpace(r) || strings.ContainsRune(openOK, r) || (code && strings.ContainsRune(`\_*~`, r))
+}
+
+func closesBefore(r rune) bool { return unicode.IsSpace(r) || strings.ContainsRune(closeOK, r) }
 
 // edgeRune returns the first or last rune a sibling text node contributes,
 // or false when the sibling is not plain text or ends in a line break.
@@ -251,20 +273,27 @@ func isSpan(n ast.Node) bool {
 // needsGap reports whether a span next to sibling would fail to format in
 // Slack: the sibling is a word character, or another span that ends in a
 // marker (Slack does not open a span right after a closing marker).
-func needsGap(sibling ast.Node, source []byte, last bool) bool {
+func needsGap(sibling ast.Node, source []byte, last, code bool) bool {
 	if isSpan(sibling) {
 		return true
 	}
 	r, ok := edgeRune(sibling, source, last)
-	return ok && touchesWord(r)
+	if !ok { // not plain text (a link, a line break): Slack treats it as a boundary
+		return false
+	}
+	if last {
+		return !opensAfter(r, code)
+	}
+	return !code && !closesBefore(r)
 }
 
 // spanGap returns the hair spaces needed outside a marked-up span.
 func spanGap(n ast.Node, source []byte) (before, after string) {
-	if prev := n.PreviousSibling(); prev != nil && needsGap(prev, source, true) && !isSpan(prev) {
+	_, code := n.(*ast.CodeSpan)
+	if prev := n.PreviousSibling(); prev != nil && needsGap(prev, source, true, code) && !isSpan(prev) {
 		before = hairSpace // a preceding span already adds its own gap after itself
 	}
-	if next := n.NextSibling(); next != nil && needsGap(next, source, false) {
+	if next := n.NextSibling(); next != nil && (isSpan(next) || needsGap(next, source, false, code)) {
 		after = hairSpace
 	}
 	return before, after
@@ -711,7 +740,7 @@ func renderTable(n *extast.Table, source []byte, maxTable int) string {
 		note := tableNote{dest: target, row: row0, col: col0}
 		switch l := n.(type) {
 		case *ast.Link:
-			note.label = strings.Join(strings.Fields(childrenInline(l, source, inlineCtx{link: true})), " ")
+			note.label = collapseSpace(childrenInline(l, source, inlineCtx{link: true}))
 		case *ast.AutoLink:
 			note.label = escape(string(l.URL(source)))
 		}
@@ -825,7 +854,7 @@ func gridWidth(widths []int) int {
 // grid it stays mrkdwn, so links and emphasis in cells keep working.
 func renderTableRecords(n *extast.Table, source []byte) string {
 	inline := func(node ast.Node, c inlineCtx) string {
-		return strings.Join(strings.Fields(childrenInline(node, source, c)), " ")
+		return collapseSpace(childrenInline(node, source, c))
 	}
 	var headers []string
 	var records []string
@@ -916,7 +945,7 @@ func renderBlock(node ast.Node, source []byte, depth, maxTable int) string {
 	case *ast.Paragraph, *ast.TextBlock:
 		return childrenInline(node, source, inlineCtx{})
 	case *ast.Heading:
-		title := strings.Join(strings.Fields(childrenInline(n, source, inlineCtx{bold: true})), " ")
+		title := collapseSpace(childrenInline(n, source, inlineCtx{bold: true}))
 		if title == "" {
 			return ""
 		}
