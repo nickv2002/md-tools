@@ -2,8 +2,10 @@ import { GNode, newRawText, newText } from './ast.js'
 import { type DelimiterProcessor } from './ast.js'
 import { ATTRIBUTE_PATTERN } from './blocks.js'
 import { type InlineParser, scanDelimiter } from './parser.js'
+import type { TextReader } from './reader.js'
 import { Segment } from './segment.js'
 import { findEmailIndex, findURLIndex, isAlphaNumeric, latin1 } from './util.js'
+import { must } from '../must.js'
 
 // ---------- code span ----------
 
@@ -22,7 +24,7 @@ export const codeSpanParser: InlineParser = {
   parse(_parent, block) {
     const [line0, startSegment] = block.peekLine()
     let opener = 0
-    for (; opener < line0!.length && line0![opener] === 0x60; opener++);
+    for (; opener < must(line0).length && must(line0)[opener] === 0x60; opener++);
     block.advance(opener)
     const [l, pos] = block.position()
     const node = new GNode('CodeSpan')
@@ -35,7 +37,7 @@ export const codeSpanParser: InlineParser = {
       }
       let closed = false
       for (let i = 0; i < line.length; i++) {
-        const c = line[i]!
+        const c = line[i]
         if (c === 0x60) {
           const oldi = i
           for (; i < line.length && line[i] === 0x60; i++);
@@ -55,15 +57,15 @@ export const codeSpanParser: InlineParser = {
     }
     const source = block.source()
     if (!codeSpanIsBlank(node, source)) {
-      let segment = node.firstChild!.segment
+      let segment = must(node.firstChild).segment
       let shouldTrimmed = true
-      if (!(!segment.isEmpty() && isSpaceOrNewline(source[segment.start]!))) shouldTrimmed = false
-      segment = node.lastChild!.segment
-      if (!(!segment.isEmpty() && isSpaceOrNewline(source[segment.stop - 1]!))) shouldTrimmed = false
+      if (!(!segment.isEmpty() && isSpaceOrNewline(source[segment.start]))) shouldTrimmed = false
+      segment = must(node.lastChild).segment
+      if (!(!segment.isEmpty() && isSpaceOrNewline(source[segment.stop - 1]))) shouldTrimmed = false
       if (shouldTrimmed) {
-        const first = node.firstChild!
+        const first = must(node.firstChild)
         first.segment = first.segment.withStart(first.segment.start + 1)
-        const last = node.lastChild!
+        const last = must(node.lastChild)
         last.segment = last.segment.withStop(last.segment.stop - 1)
       }
     }
@@ -88,7 +90,7 @@ export const emphasisParser: InlineParser = {
   parse(_parent, block, pc) {
     const before = block.precedingCharacter()
     const [line, segment] = block.peekLine()
-    const node = scanDelimiter(line!, before, 1, emphasisDelimiterProcessor)
+    const node = scanDelimiter(must(line), before, 1, emphasisDelimiterProcessor)
     if (node === null) return null
     node.segment = segment.withStop(segment.start + node.originalLength)
     block.advance(node.originalLength)
@@ -103,7 +105,7 @@ export const autoLinkParser: InlineParser = {
   trigger: [0x3c],
   parse(_parent, block) {
     const [line0, segment] = block.peekLine()
-    const line = line0!
+    const line = must(line0)
     let stop = findEmailIndex(line.subarray(1))
     let typ: 'email' | 'url' = 'email'
     if (stop < 0) {
@@ -135,7 +137,6 @@ const startsWith = (line: Uint8Array, prefix: string): boolean => {
   return true
 }
 
-import type { TextReader } from './reader.js'
 
 function indexOfSeq(line: Uint8Array, seq: string): number {
   return latin1(line).indexOf(seq)
@@ -171,20 +172,20 @@ function parseComment(block: TextReader): GNode | null {
   const [savedLine, savedSegment] = block.position()
   const node = new GNode('RawHTML')
   let [line, segment] = block.peekLine()
-  if (startsWith(line!, '<!-->')) {
+  if (startsWith(must(line), '<!-->')) {
     node.segments.append(segment.withStop(segment.start + 5))
     block.advance(5)
     return node
   }
-  if (startsWith(line!, '<!--->')) {
+  if (startsWith(must(line), '<!--->')) {
     node.segments.append(segment.withStop(segment.start + 6))
     block.advance(6)
     return node
   }
   let offset = 4
-  let rest: Uint8Array | null = line!.subarray(offset)
+  let rest: Uint8Array | null = must(line).subarray(offset)
   for (;;) {
-    const index = indexOfSeq(rest!, '-->')
+    const index = indexOfSeq(must(rest), '-->')
     if (index > -1) {
       node.segments.append(segment.withStop(segment.start + offset + index + 3))
       block.advance(offset + index + 3)
@@ -224,12 +225,12 @@ export const rawHTMLParser: InlineParser = {
   trigger: [0x3c],
   parse(_parent, block) {
     const [line0] = block.peekLine()
-    const line = line0!
-    if (line.length > 1 && isAlphaNumeric(line[1]!)) return parseMultiLineRegexp(openTagRegexp, block)
-    if (line.length > 2 && line[1] === 0x2f && isAlphaNumeric(line[2]!)) return parseMultiLineRegexp(closeTagRegexp, block)
+    const line = must(line0)
+    if (line.length > 1 && isAlphaNumeric(line[1])) return parseMultiLineRegexp(openTagRegexp, block)
+    if (line.length > 2 && line[1] === 0x2f && isAlphaNumeric(line[2])) return parseMultiLineRegexp(closeTagRegexp, block)
     if (startsWith(line, '<!--')) return parseComment(block)
     if (startsWith(line, '<?')) return parseUntil(block, '?>')
-    if (line.length > 2 && line[1] === 0x21 && line[2]! >= 0x41 && line[2]! <= 0x5a) return parseUntil(block, '>')
+    if (line.length > 2 && line[1] === 0x21 && line[2] >= 0x41 && line[2] <= 0x5a) return parseUntil(block, '>')
     if (startsWith(line, '<![CDATA[')) return parseUntil(block, ']]>')
     return null
   },

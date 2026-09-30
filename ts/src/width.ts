@@ -1,3 +1,5 @@
+import { must } from './must.js'
+
 /**
  * Code points that render two cells wide: East Asian Wide and Fullwidth blocks
  * plus characters with default emoji presentation.
@@ -46,25 +48,25 @@ const isEmojiModifier = (r: number): boolean => r >= 0x1f3fb && r <= 0x1f3ff
  * emoji-styled (VS16, modifier, keycap, flag, ZWJ) is two cells wide.
  */
 export function displayWidth(s: string): number {
-  const rs = Array.from(s, (ch) => ch.codePointAt(0)!)
+  const rs = Array.from(s, (ch) => must(ch.codePointAt(0)))
   let total = 0
   let i = 0
   while (i < rs.length) {
-    const base = rs[i++]!
+    const base = rs[i++]
     if (isZeroWidth(base)) continue
     let width = isWide(base) ? 2 : 1
     let emoji = false
     if (isRegionalIndicator(base)) {
       // a flag, or a lone letter drawn in a box
-      if (i < rs.length && isRegionalIndicator(rs[i]!)) i++
+      if (i < rs.length && isRegionalIndicator(rs[i])) i++
       width = 2
       emoji = true
     }
     while (i < rs.length) {
-      const r = rs[i]!
+      const r = rs[i]
       if (r === 0xfe0f || r === 0x20e3 || isEmojiModifier(r)) {
         emoji = true
-      } else if (r === 0x200d && i + 1 < rs.length && !isZeroWidth(rs[i + 1]!)) {
+      } else if (r === 0x200d && i + 1 < rs.length && !isZeroWidth(rs[i + 1])) {
         i++ // the joined character belongs to this cluster
         emoji = true
       } else if (r === 0xfe0e) {

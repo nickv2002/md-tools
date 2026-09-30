@@ -3,10 +3,11 @@ import { Context, type BlockParser, type ParagraphTransformer, State, contextKey
 import { BlockReader, type TextReader } from './reader.js'
 import { Segment } from './segment.js'
 import {
-  firstNonSpacePosition, indentPosition, indentPositionPadding, indentWidth, isBlank, isNumeric, isSpace, isPunct, latin1, tabWidth,
+  firstNonSpacePosition, indentPosition, indentPositionPadding, indentWidth, isBlank, isNumeric, isSpace, latin1, tabWidth,
   toLinkReference, trimLeftLength, trimLeftSpaceLength, trimRightSpaceLength,
 } from './util.js'
 import { parseLinkDestination, LINK_FIND_CLOSURE_OPTIONS } from './link.js'
+import { must } from '../must.js'
 
 const { Continue, Close, HasChildren, NoChildren, RequireParagraph } = State
 
@@ -27,7 +28,7 @@ export const paragraphParser: BlockParser = {
   },
   continue(node, reader) {
     const [line, segment] = reader.peekLine()
-    if (isBlank(line!)) return Close
+    if (isBlank(must(line))) return Close
     node.lines.append(segment)
     reader.advanceToEOL()
     return Continue | NoChildren
@@ -39,7 +40,7 @@ export const paragraphParser: BlockParser = {
       const length = lines.length
       lines.set(length - 1, lines.at(length - 1).trimRightSpace(reader.source()))
     }
-    if (lines.length === 0) node.parent!.removeChild(node)
+    if (lines.length === 0) must(node.parent).removeChild(node)
   },
   canInterruptParagraph: false,
   canAcceptIndentedLine: false,
@@ -62,7 +63,7 @@ function matchesSetextHeadingBar(line: Uint8Array): [number, boolean] {
     level2 = trimLeftLength(line.subarray(start, end), [0x2d])
     c = 0x2d
   }
-  if (isSpace(line[end - 1]!)) end -= trimRightSpaceLength(line.subarray(start, end))
+  if (isSpace(line[end - 1])) end -= trimRightSpaceLength(line.subarray(start, end))
   if (!((level1 > 0 && start + level1 === end) || (level2 > 0 && start + level2 === end))) return [0, false]
   return [c, true]
 }
@@ -74,7 +75,7 @@ export const setextHeadingParser: BlockParser = {
     if (last === null) return [null, NoChildren]
     if (last.kind !== 'Paragraph' || last.parent !== parent) return [null, NoChildren]
     const [line, segment] = reader.peekLine()
-    const [c, ok] = matchesSetextHeadingBar(line!)
+    const [c, ok] = matchesSetextHeadingBar(must(line))
     if (!ok) return [null, NoChildren]
     const node = newBlock('Heading')
     node.level = c === 0x2d ? 2 : 1
@@ -86,7 +87,7 @@ export const setextHeadingParser: BlockParser = {
   close(node, reader, pc) {
     let segment = node.lines.at(0)
     node.lines.clear()
-    const tmp = pc.get<GNode>(temporaryParagraphKey)!
+    const tmp = must(pc.get<GNode>(temporaryParagraphKey))
     pc.set(temporaryParagraphKey, null)
     if (tmp.lines.length === 0) {
       const next = node.next
@@ -94,11 +95,11 @@ export const setextHeadingParser: BlockParser = {
       if (next === null || !isParagraph(next)) {
         const para = newBlock('Paragraph')
         para.lines.append(segment)
-        node.parent!.insertAfter(node, para)
+        must(node.parent).insertAfter(node, para)
       } else {
         next.lines.unshift(segment)
       }
-      node.parent!.removeChild(node)
+      must(node.parent).removeChild(node)
     } else {
       node.lines = tmp.lines
       node.blankPreviousLines = tmp.blankPreviousLines
@@ -118,7 +119,7 @@ export function isThematicBreak(line: Uint8Array, offset: number): boolean {
   let mark = 0
   let count = 0
   for (let i = pos; i < line.length; i++) {
-    const c = line[i]!
+    const c = line[i]
     if (isSpace(c)) continue
     if (mark === 0) {
       mark = c
@@ -136,7 +137,7 @@ export const thematicBreakParser: BlockParser = {
   trigger: [0x2d, 0x2a, 0x5f],
   open(_parent, reader) {
     const [line] = reader.peekLine()
-    if (isThematicBreak(line!, reader.lineOffset())) {
+    if (isThematicBreak(must(line), reader.lineOffset())) {
       reader.advanceToEOL()
       return [newBlock('ThematicBreak'), NoChildren]
     }
@@ -154,7 +155,7 @@ export const atxHeadingParser: BlockParser = {
   trigger: [0x23],
   open(_parent, reader, pc) {
     const [line0, segment] = reader.peekLine()
-    const line = line0!
+    const line = must(line0)
     const pos = pc.blockOffset
     if (pos < 0) return [null, NoChildren]
     let i = pos
@@ -187,7 +188,7 @@ export const atxHeadingParser: BlockParser = {
         reader.advanceToEOL()
         return [node, NoChildren]
       }
-      if (i !== stop - 1 && isSpace(hv[i]!)) {
+      if (i !== stop - 1 && isSpace(hv[i])) {
         stop = i
         stop -= trimRightSpaceLength(hv.subarray(0, stop))
       }
@@ -219,8 +220,8 @@ export const codeBlockParser: BlockParser = {
   trigger: null,
   open(_parent, reader) {
     const [line] = reader.peekLine()
-    const [pos, padding] = indentPosition(line!, reader.lineOffset(), 4)
-    if (pos < 0 || isBlank(line!)) return [null, NoChildren]
+    const [pos, padding] = indentPosition(must(line), reader.lineOffset(), 4)
+    if (pos < 0 || isBlank(must(line))) return [null, NoChildren]
     const node = newBlock('CodeBlock')
     reader.advanceAndSetPadding(pos, padding)
     let [, segment] = reader.peekLine()
@@ -233,11 +234,11 @@ export const codeBlockParser: BlockParser = {
   continue(node, reader) {
     const [line, segment0] = reader.peekLine()
     let segment = segment0
-    if (isBlank(line!)) {
+    if (isBlank(must(line))) {
       node.lines.append(segment.trimLeftSpaceWidth(4, reader.source()))
       return Continue | NoChildren
     }
-    const [pos, padding] = indentPosition(line!, reader.lineOffset(), 4)
+    const [pos, padding] = indentPosition(must(line), reader.lineOffset(), 4)
     if (pos < 0) return Close
     reader.advanceAndSetPadding(pos, padding)
     ;[, segment] = reader.peekLine()
@@ -275,11 +276,11 @@ export const fencedCodeBlockParser: BlockParser = {
   trigger: [0x7e, 0x60],
   open(_parent, reader, pc) {
     const [line0, segment] = reader.peekLine()
-    const line = line0!
+    const line = must(line0)
     const pos = pc.blockOffset
     if (pos < 0 || (line[pos] !== 0x60 && line[pos] !== 0x7e)) return [null, NoChildren]
     const findent = pos
-    const fenceChar = line[pos]!
+    const fenceChar = line[pos]
     let i = pos
     for (; i < line.length && line[i] === fenceChar; i++);
     const oFenceLength = i - pos
@@ -293,7 +294,7 @@ export const fencedCodeBlockParser: BlockParser = {
         const infoStart = segment.start - segment.padding + i + left
         const infoStop = segment.stop - right
         const value = rest.subarray(left, rest.length - right)
-        if (fenceChar === 0x60 && value.indexOf(0x60) > -1) return [null, NoChildren]
+        if (fenceChar === 0x60 && value.includes(0x60)) return [null, NoChildren]
         else if (infoStart !== infoStop) {
           info = new GNode('Text')
           info.segment = new Segment(infoStart, infoStop)
@@ -307,8 +308,8 @@ export const fencedCodeBlockParser: BlockParser = {
   },
   continue(node, reader, pc) {
     const [line0, segment] = reader.peekLine()
-    const line = line0!
-    const fdata = pc.get<FenceData>(fencedCodeBlockInfoKey)!
+    const line = must(line0)
+    const fdata = must(pc.get<FenceData>(fencedCodeBlockInfoKey))
     const [w, pos0] = indentWidth(line, reader.lineOffset())
     if (w < 4) {
       let i = pos0
@@ -334,7 +335,7 @@ export const fencedCodeBlockParser: BlockParser = {
   },
   close(node, _reader, pc) {
     const fdata = pc.get<FenceData>(fencedCodeBlockInfoKey)
-    if (fdata && fdata.node === node) pc.set(fencedCodeBlockInfoKey, null)
+    if (fdata?.node === node) pc.set(fencedCodeBlockInfoKey, null)
   },
   canInterruptParagraph: true,
   canAcceptIndentedLine: false,
@@ -344,7 +345,7 @@ export const fencedCodeBlockParser: BlockParser = {
 
 function blockquoteProcess(reader: TextReader): boolean {
   const [line0] = reader.peekLine()
-  const line = line0!
+  const line = must(line0)
   const [w, pos0] = indentWidth(line, reader.lineOffset())
   let pos = pos0
   if (w > 3 || pos >= line.length || line[pos] !== 0x3e) return false
@@ -400,9 +401,9 @@ function parseListItem(line: Uint8Array): [number[], ListItemType] {
     ret[3] = i
     typ = 'bulletList'
   } else if (i < l) {
-    for (; i < l && isNumeric(line[i]!); i++);
+    for (; i < l && isNumeric(line[i]); i++);
     ret[3] = i
-    if (ret[3] === ret[2] || ret[3]! - ret[2]! > 9) return [ret, 'notList']
+    if (ret[3] === ret[2] || ret[3] - ret[2] > 9) return [ret, 'notList']
     if (i < l && (line[i] === 0x2e || line[i] === 0x29)) {
       i++
       ret[3] = i
@@ -424,22 +425,22 @@ function parseListItem(line: Uint8Array): [number[], ListItemType] {
   }
   ret[4] = i
   ret[5] = line.length
-  if (line[ret[5]! - 1] === 0x0a && line[i] !== 0x0a) ret[5]!--
+  if (line[ret[5] - 1] === 0x0a && line[i] !== 0x0a) ret[5]--
   return [ret, typ]
 }
 
 function matchesListItem(source: Uint8Array, strict: boolean): [number[], ListItemType] {
   const [m, typ] = parseListItem(source)
-  if (typ !== 'notList' && (!strict || (strict && m[1]! < 4))) return [m, typ]
+  if (typ !== 'notList' && (!strict || (strict && m[1] < 4))) return [m, typ]
   return [m, 'notList']
 }
 
 function calcListOffset(source: Uint8Array, match: number[]): number {
   let offset: number
-  if (match[4]! < 0 || isBlank(source.subarray(match[4]!))) {
+  if (match[4] < 0 || isBlank(source.subarray(match[4]))) {
     offset = 1 // list item starts with a blank line
   } else {
-    offset = indentWidth(source.subarray(match[4]!), match[4]!)[0]
+    offset = indentWidth(source.subarray(match[4]), match[4])[0]
     if (offset > 4) offset = 1 // offseted codeblock
   }
   return offset
@@ -455,28 +456,28 @@ export const listItemParser: BlockParser = {
     if (parent.kind !== 'List') return [null, NoChildren] // list item must be a child of a list
     const offset = lastOffset(parent)
     const [line0] = reader.peekLine()
-    const line = line0!
+    const line = must(line0)
     const [match, typ] = matchesListItem(line, false)
     if (typ === 'notList') return [null, NoChildren]
-    if (match[1]! - offset > 3) return [null, NoChildren]
+    if (match[1] - offset > 3) return [null, NoChildren]
     pc.set(emptyListItemWithBlankLines, null)
     const itemOffset = calcListOffset(line, match)
     const node = newBlock('ListItem')
-    node.offset = match[3]! + itemOffset
-    if (match[4]! < 0 || isBlank(line.subarray(match[4]!, match[5]!))) return [node, NoChildren]
-    const [pos, padding] = indentPosition(line.subarray(match[4]!), match[4]!, itemOffset)
-    const child = match[3]! + pos
+    node.offset = match[3] + itemOffset
+    if (match[4] < 0 || isBlank(line.subarray(match[4], match[5]))) return [node, NoChildren]
+    const [pos, padding] = indentPosition(line.subarray(match[4]), match[4], itemOffset)
+    const child = match[3] + pos
     reader.advanceAndSetPadding(child, padding)
     return [node, HasChildren]
   },
   continue(node, reader, pc) {
     const [line0] = reader.peekLine()
-    const line = line0!
+    const line = must(line0)
     if (isBlank(line)) {
       reader.advanceToEOL()
       return Continue | HasChildren
     }
-    const offset = lastOffset(node.parent!)
+    const offset = lastOffset(must(node.parent))
     const isEmpty = node.childCount === 0 && pc.get(emptyListItemWithBlankLines) !== undefined
     const [indent] = indentWidth(line, reader.lineOffset())
     if ((isEmpty || indent < offset) && indent < 4) {
@@ -503,26 +504,26 @@ export const listParser: BlockParser = {
   trigger: [0x2d, 0x2b, 0x2a, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39],
   open(parent, reader, pc) {
     const last = pc.lastOpenedBlock().node
-    if ((last !== null && last.kind === 'List') || pc.get(skipListParserKey) !== undefined) {
+    if (last?.kind === 'List' || pc.get(skipListParserKey) !== undefined) {
       pc.set(skipListParserKey, null)
       return [null, NoChildren]
     }
     const [line0] = reader.peekLine()
-    const line = line0!
+    const line = must(line0)
     const [match, typ] = matchesListItem(line, true)
     if (typ === 'notList') return [null, NoChildren]
     let start = -1
     if (typ === 'orderedList') {
-      const number = line.subarray(match[2]!, match[3]! - 1)
+      const number = line.subarray(match[2], match[3] - 1)
       start = parseInt(latin1(number), 10)
     }
-    if (isParagraph(last) && last!.parent === parent) {
+    if (isParagraph(last) && must(last).parent === parent) {
       // we allow only lists starting with 1 to interrupt paragraphs.
       if (typ === 'orderedList' && start !== 1) return [null, NoChildren]
       // an empty list item cannot interrupt a paragraph:
-      if (match[4]! < 0 || isBlank(line.subarray(match[4]!, match[5]!))) return [null, NoChildren]
+      if (match[4] < 0 || isBlank(line.subarray(match[4], match[5]))) return [null, NoChildren]
     }
-    const marker = line[match[3]! - 1]!
+    const marker = line[match[3] - 1]
     const node = newBlock('List')
     node.marker = marker
     if (start > -1) node.start = start
@@ -531,28 +532,28 @@ export const listParser: BlockParser = {
   },
   continue(node, reader, pc) {
     const [line0] = reader.peekLine()
-    const line = line0!
+    const line = must(line0)
     if (isBlank(line)) {
-      if (node.lastChild!.childCount === 0) pc.set(emptyListItemWithBlankLines, true)
+      if (must(node.lastChild).childCount === 0) pc.set(emptyListItemWithBlankLines, true)
       return Continue | HasChildren
     }
     // "offset" is the width the marker takes; a line indented less than the
     // last item's offset may start a new item of this list.
     const offset = lastOffset(node)
-    const lastIsEmpty = node.lastChild!.childCount === 0
+    const lastIsEmpty = must(node.lastChild).childCount === 0
     const [indent] = indentWidth(line, reader.lineOffset())
     if (indent < offset || lastIsEmpty) {
       if (indent < 4) {
         const [match, typ] = matchesListItem(line, false) // may have a leading spaces more than 3
-        if (typ !== 'notList' && match[1]! - offset < 4) {
-          const marker = line[match[3]! - 1]!
+        if (typ !== 'notList' && match[1] - offset < 4) {
+          const marker = line[match[3] - 1]
           if (!listCanContinue(node, marker, typ === 'orderedList')) return Close
           // Thematic Breaks take precedence over lists
-          if (isThematicBreak(line.subarray(match[3]! - 1), 0)) {
+          if (isThematicBreak(line.subarray(match[3] - 1), 0)) {
             let isHeading = false
             const last = pc.lastOpenedBlock().node
             if (isParagraph(last)) {
-              const [c, ok] = matchesSetextHeadingBar(line.subarray(match[3]! - 1))
+              const [c, ok] = matchesSetextHeadingBar(line.subarray(match[3] - 1))
               if (ok && c === 0x2d) isHeading = true
             }
             if (!isHeading) return Close
@@ -623,7 +624,7 @@ export const htmlBlockParser: BlockParser = {
   open(_parent, reader, pc) {
     let node: GNode | null = null
     const [line0, segment] = reader.peekLine()
-    const line = line0!
+    const line = must(line0)
     const last = pc.lastOpenedBlock().node
     const pos = pc.blockOffset
     if (pos < 0 || line[pos] !== 0x3c) return [null, NoChildren]
@@ -642,7 +643,7 @@ export const htmlBlockParser: BlockParser = {
     else if ((m = type7.exec(text)) !== null) {
       const isCloseTag = m[1] === '/'
       const hasAttr = (m[3] ?? '') !== ''
-      const tagName = m[2]!.toLowerCase()
+      const tagName = m[2].toLowerCase()
       if (ALLOWED_BLOCK_TAGS.has(tagName)) {
         node = make(6)
       } else if (tagName !== 'script' && tagName !== 'style' && tagName !== 'pre' && !isParagraph(last) && !(isCloseTag && hasAttr)) {
@@ -651,7 +652,7 @@ export const htmlBlockParser: BlockParser = {
     }
     if (node === null) {
       const m6 = type6.exec(text)
-      if (m6 !== null && ALLOWED_BLOCK_TAGS.has(m6[1]!.toLowerCase())) node = make(6)
+      if (m6 !== null && ALLOWED_BLOCK_TAGS.has(m6[1].toLowerCase())) node = make(6)
     }
     if (node !== null) {
       reader.advanceToEOL()
@@ -663,7 +664,7 @@ export const htmlBlockParser: BlockParser = {
   continue(node, reader) {
     const lines = node.lines
     const [line0, segment] = reader.peekLine()
-    const line = line0!
+    const line = must(line0)
     let closurePattern: string | null = null
     switch (node.htmlBlockType) {
       case 1:
@@ -680,7 +681,7 @@ export const htmlBlockParser: BlockParser = {
       case 3:
       case 4:
       case 5:
-        closurePattern = { 2: '-->', 3: '?>', 4: '>', 5: ']]>' }[node.htmlBlockType]!
+        closurePattern = { 2: '-->', 3: '?>', 4: '>', 5: ']]>' }[node.htmlBlockType]
         if (lines.length === 1) {
           if (bytesContain(lines.at(0).value(reader.source()), closurePattern)) return Close
         }
@@ -721,7 +722,7 @@ function parseLinkReferenceDefinition(block: TextReader, pc: Context): [number, 
   if (!found) return [-1, -1]
   const concat = (): Uint8Array => {
     const parts: Uint8Array[] = []
-    for (let i = 0; i < segments!.length; i++) parts.push(block.value(segments!.at(i)))
+    for (let i = 0; i < must(segments).length; i++) parts.push(block.value(must(segments).at(i)))
     const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
     let at = 0
     for (const p of parts) {
@@ -742,7 +743,7 @@ function parseLinkReferenceDefinition(block: TextReader, pc: Context): [number, 
   let [endLine] = block.position()
   const [, spaces] = block.skipSpaces()
   const opener = block.peek()
-  const addRef = (title: Uint8Array | null): void => pc.addReference(toLinkReference(label), { label, destination: destination!, title })
+  const addRef = (title: Uint8Array | null): void => pc.addReference(toLinkReference(label), { label, destination: must(destination), title })
   if (opener !== 0x22 && opener !== 0x27 && opener !== 0x28) {
     if (!isNewLine) return [-1, -1]
     addRef(null)
@@ -795,7 +796,7 @@ export const linkReferenceParagraphTransformer: ParagraphTransformer = {
     if (lines.length === 0) {
       const t = newBlock('TextBlock')
       t.blankPreviousLines = node.blankPreviousLines
-      node.parent!.replaceChild(node, t)
+      must(node.parent).replaceChild(node, t)
       return
     }
     node.lines = lines

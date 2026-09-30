@@ -108,7 +108,7 @@ export class Segments {
   }
 
   at(i: number): Segment {
-    return this.values[i]!
+    return this.values[i]
   }
 
   set(i: number, v: Segment): void {

@@ -1,4 +1,5 @@
 import { Segment, Segments } from './segment.js'
+import { must } from '../must.js'
 
 export type GKind =
   | 'Document' | 'Paragraph' | 'TextBlock' | 'Heading' | 'ThematicBreak' | 'CodeBlock' | 'FencedCodeBlock' | 'Blockquote' | 'List' | 'ListItem' | 'HTMLBlock'
@@ -89,7 +90,7 @@ export class GNode {
       v.next = null
       v.prev = null
     } else {
-      const last = this.lastChild!
+      const last = must(this.lastChild)
       last.next = v
       v.prev = last
     }
@@ -160,14 +161,14 @@ export function newRawText(segment: Segment): GNode {
 /** ast.MergeOrAppendTextSegment */
 export function mergeOrAppendTextSegment(parent: GNode, s: Segment): void {
   const last = parent.lastChild
-  if (last && last.kind === 'Text' && last.segment.stop === s.start && !last.soft) last.segment = last.segment.withStop(s.stop)
+  if (last?.kind === 'Text' && last.segment.stop === s.start && !last.soft) last.segment = last.segment.withStop(s.stop)
   else parent.appendChild(newText(s))
 }
 
 /** ast.MergeOrReplaceTextSegment */
 export function mergeOrReplaceTextSegment(parent: GNode, n: GNode, s: Segment): void {
   const prev = n.prev
-  if (prev && prev.kind === 'Text' && prev.segment.stop === s.start && !prev.soft) {
+  if (prev?.kind === 'Text' && prev.segment.stop === s.start && !prev.soft) {
     prev.segment = prev.segment.withStop(s.stop)
     parent.removeChild(n)
   } else {

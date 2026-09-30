@@ -51,12 +51,12 @@ const OTHERS = '${rest.map((r) => r.map(hex).join(',')).join(';')}'
 export const CASE_FOLDING: ReadonlyMap<number, string> = (() => {
   const map = new Map<number, string>()
   for (const run of RUNS.split(';')) {
-    const [start, count, step, delta] = run.split(',').map((x) => parseInt(x, 16))
-    for (let i = 0; i < count!; i++) map.set(start! + i * step!, String.fromCodePoint(start! + i * step! + delta!))
+    const [start = 0, count = 0, step = 0, delta = 0] = run.split(',').map((x) => parseInt(x, 16))
+    for (let i = 0; i < count; i++) map.set(start + i * step, String.fromCodePoint(start + i * step + delta))
   }
   for (const entry of OTHERS.split(';')) {
-    const [cp, ...folded] = entry.split(',').map((x) => parseInt(x, 16))
-    map.set(cp!, String.fromCodePoint(...folded))
+    const [cp = 0, ...folded] = entry.split(',').map((x) => parseInt(x, 16))
+    map.set(cp, String.fromCodePoint(...folded))
   }
   return map
 })()

@@ -52,7 +52,7 @@ interface JsonNode {
 /** Rebuild a tree from the Go dumper's JSON. */
 export function fromJSON(j: JsonNode): Node {
   const { k, c, ...attrs } = j
-  return node(k, attrs as Partial<Node>, (c ?? []).map(fromJSON))
+  return node(k, attrs, (c ?? []).map(fromJSON))
 }
 
 /** Plain structural form for comparing two trees. */
