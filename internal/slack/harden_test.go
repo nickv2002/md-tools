@@ -54,19 +54,19 @@ func TestLinkSafety(t *testing.T) {
 func TestBlockNesting(t *testing.T) {
 	runCases(t, []struct{ name, input, want string }{
 		{"ordered start number kept", "5. five\n6. six", "5. five\n6. six\n"},
-		{"nested ordered under bullets", "- a\n  1. b\n  2. c\n- d", "- a\n  1. b\n  2. c\n- d\n"},
-		{"fence in nested list", "1. a\n   - b\n     ```\n     x\n     ```\n   - c", "1. a\n  - b\n```\nx\n```\n  - c\n"},
-		{"quote in list item starts its own line", "- a\n\n  > quote\n  > more\n- b", "- a\n> quote more\n- b\n"},
-		{"table in list item", "- a\n\n  | A |\n  |---|\n  | 1 |\n- b", "- a\n```\nA\n-\n1\n```\n- b\n"},
-		{"three paragraphs in list item", "- a\n\n  b\n\n  c\n- d", "- a\nb\nc\n- d\n"},
-		{"list in quote", "> - a\n>   - b", "> - a\n>  - b\n"},
+		{"nested ordered under bullets", "- a\n  1. b\n  2. c\n- d", "• a\n    1. b\n    2. c\n• d\n"},
+		{"fence in nested list", "1. a\n   - b\n     ```\n     x\n     ```\n   - c", "1. a\n   ◦ b\n```\nx\n```\n   ◦ c\n"},
+		{"quote in list item starts its own line", "- a\n\n  > quote\n  > more\n- b", "• a\n> quote more\n• b\n"},
+		{"table in list item", "- a\n\n  | A |\n  |---|\n  | 1 |\n- b", "• a\n```\nA\n-\n1\n```\n• b\n"},
+		{"three paragraphs in list item", "- a\n\n  b\n\n  c\n- d", "• a\nb\nc\n• d\n"},
+		{"list in quote", "> - a\n>   - b", "> • a\n>    ◦ b\n"},
 		{"fence alone in a quote stands on its own", "> ```\n> x\n> ```", "```\nx\n```\n"},
 		{"fence splits a quote in two", "> before\n>\n> ```\n> x\n> ```\n>\n> after", "> before\n```\nx\n```\n> after\n"},
 		{"table in a quote stands on its own", "> intro\n>\n> | A |\n> |---|\n> | 1 |", "> intro\n```\nA\n-\n1\n```\n"},
 		{"continuation lines carry no space after the marker", "> a\n> b\n>\n> c", "> a b\n>\n>c\n"},
 		{"nested quotes", "> a\n>\n> > b", "> a\n>\n>> b\n"},
-		{"empty list item", "- \n- b", "- \n- b\n"},
-		{"task list nested", "- [x] a\n  - [ ] b", "- ☑ a\n  - ☐ b\n"},
+		{"empty list item", "- \n- b", "• \n• b\n"},
+		{"task list nested", "- [x] a\n  - [ ] b", "• ☑ a\n    ◦ ☐ b\n"},
 		{"indented code block", "    code\n\ntext", "```\ncode\n```\n\ntext\n"},
 		{"empty fence", "```\n```", "```\n\n```\n"},
 		{"thematic breaks", "* * *\n\n- - -", "---\n\n---\n"},
@@ -76,7 +76,7 @@ func TestBlockNesting(t *testing.T) {
 		{"html block and comment dropped", "<!-- c -->\n\n<div>x</div>\n\ntext", "text\n"},
 		{"toml front matter dropped", "+++\na = 1\n+++\ntext", "text\n"},
 		{"unterminated front matter is text", "---\na: 1\ntext", "---\n\na: 1 text\n"},
-		{"crlf input", "# A\r\n\r\n- b\r\n", "*A*\n\n- b\n"},
+		{"crlf input", "# A\r\n\r\n- b\r\n", "*A*\n\n• b\n"},
 		{"empty input", "", "\n"},
 		{"whitespace input", " \n\t\n", "\n"},
 	})
@@ -419,5 +419,16 @@ func TestInlineCodeEdgeCases(t *testing.T) {
 		{"separate code spans stay separate", "`a` `b`", "`a` `b`\n"},
 		{"spaced code spans", "`a` `b` `c`", "`a` `b` `c`\n"},
 		{"backslash and glob stay literal", "`C:\\dir` `*.go`", "`C:\\dir` `*.go`\n"},
+	})
+}
+
+func TestListBulletsAndNesting(t *testing.T) {
+	runCases(t, []struct{ name, input, want string }{
+		{"bullets change by level", "- a\n  - b\n    - c\n      - d", "• a\n    ◦ b\n        – c\n            – d\n"},
+		{"ordered nesting aligns under the parent text", "1. one\n2. two\n   1. nested one\n   2. nested two\n3. three", "1. one\n2. two\n   1. nested one\n   2. nested two\n3. three\n"},
+		{"wide ordinals widen the nesting", "9. a\n10. b\n    - c", "9. a\n10. b\n    ◦ c\n"},
+		{"bullets inside ordered inside bullets", "- a\n  1. b\n     - c", "• a\n    1. b\n       – c\n"},
+		{"ordered start number is kept when nested", "- a\n\n  5. b\n  6. c", "• a\n    5. b\n    6. c\n"},
+		{"sibling lists restart the level", "- a\n  - b\n\ntext\n\n- c", "• a\n    ◦ b\n\ntext\n\n• c\n"},
 	})
 }

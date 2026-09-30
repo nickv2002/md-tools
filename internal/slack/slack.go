@@ -422,6 +422,7 @@ func isParagraph(n ast.Node) bool {
 }
 
 func renderList(n *ast.List, source []byte, depth, maxTable int) string {
+	level, indent := listPlacement(n)
 	var lines []string
 	ordinal := n.Start
 	for item := n.FirstChild(); item != nil; item = item.NextSibling() {
@@ -452,14 +453,47 @@ func renderList(n *ast.List, source []byte, depth, maxTable int) string {
 			}
 			body.WriteString(part)
 		}
-		marker := "-"
+		marker := bulletFor(level)
 		if n.IsOrdered() {
 			marker = fmt.Sprintf("%d.", ordinal)
 			ordinal++
 		}
-		lines = append(lines, strings.Repeat("  ", depth)+marker+" "+body.String())
+		lines = append(lines, strings.Repeat(" ", indent)+marker+" "+body.String())
 	}
 	return strings.Join(lines, "\n")
+}
+
+// bulletFor picks the bullet for a list nested level lists deep. Slack has no
+// list syntax in message text, so these are plain characters; "▪" renders as a
+// black box in Slack, hence the en dash for the third level and deeper.
+func bulletFor(level int) string {
+	switch level {
+	case 0:
+		return "•"
+	case 1:
+		return "◦"
+	}
+	return "–"
+}
+
+// listPlacement returns how many lists enclose n and how many spaces its lines
+// are indented: each enclosing ordered list adds its marker width so nested
+// items sit under the parent's text, and each enclosing bullet list adds four.
+func listPlacement(n *ast.List) (level, indent int) {
+	for p := n.Parent(); p != nil; p = p.Parent() {
+		list, ok := p.(*ast.List)
+		if !ok {
+			continue
+		}
+		level++
+		if list.IsOrdered() {
+			last := list.Start + list.ChildCount() - 1
+			indent += len(strconv.Itoa(last)) + 2 // "N." and the space
+		} else {
+			indent += 4
+		}
+	}
+	return level, indent
 }
 
 // plainText flattens inline nodes to unformatted text. Slack does not render
