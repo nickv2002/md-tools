@@ -21,6 +21,7 @@ type dumpNode struct {
 	Hard     bool        `json:"hard,omitempty"`
 	Level    int         `json:"level,omitempty"`
 	Ordered  bool        `json:"ordered,omitempty"`
+	Count    int         `json:"count,omitempty"`
 	Start    int         `json:"start,omitempty"`
 	Dest     string      `json:"dest,omitempty"`
 	Email    bool        `json:"email,omitempty"`
@@ -50,7 +51,7 @@ func dumpTree(n ast.Node, source []byte) *dumpNode {
 	case *ast.Emphasis:
 		d.Level = t.Level
 	case *ast.List:
-		d.Ordered, d.Start = t.IsOrdered(), t.Start
+		d.Ordered, d.Start, d.Count = t.IsOrdered(), t.Start, t.ChildCount()
 	case *ast.Link:
 		d.Dest = string(t.Destination)
 	case *ast.Image:

@@ -5,7 +5,7 @@ import { displayWidth } from './width.js'
 const escape = (s: string): string => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 
 /** A zero-width space placed before a literal markup character stops Slack from treating it as an emphasis delimiter. */
-const ZERO_WIDTH_SPACE = '​'
+const ZERO_WIDTH_SPACE = '\u200b'
 
 /** Percent-encodes the characters that would break out of a Slack <url|label> link, then entity-escapes. */
 function slackURL(u: string): string {
@@ -56,7 +56,7 @@ const fenceSafe = (s: string): string => s.replaceAll('```', '``' + ZERO_WIDTH_S
  * punctuation, so a span that touches a letter would print its markers
  * literally; a zero-width space or word joiner does not help, but U+200A does.
  */
-const HAIR_SPACE = ' '
+const HAIR_SPACE = '\u200a'
 
 /**
  * Slack opens a span only after whitespace or one of OPEN_OK and closes it only
@@ -327,7 +327,7 @@ function listPlacement(n: Node): { level: number; indent: number } {
     if (p.k !== 'List') continue
     level++
     if (p.ordered) {
-      const last = (p.start ?? 0) + p.c.length - 1
+      const last = (p.start ?? 0) + (p.count ?? p.c.length) - 1
       indent += String(last).length + 2 // "N." and the space
     } else {
       indent += 4

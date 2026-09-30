@@ -19,8 +19,10 @@ function stripFrontMatter(input: string): string {
   return s
 }
 
+/** The parser's input: well-formed text with front matter removed. */
+export const prepare = (input: string): string => stripFrontMatter(input.toWellFormed())
+
 /** Renders Markdown as Slack mrkdwn. Unsupported block syntax becomes readable plain text; front matter and raw HTML are omitted. */
 export function markdownToSlackMrkdwn(input: string, opts: Options = {}): string {
-  const source = stripFrontMatter(input.toWellFormed().replaceAll('�', '�'))
-  return renderDocument(parseMarkdown(source), opts.maxTableWidth ?? DEFAULT_MAX_TABLE_WIDTH)
+  return renderDocument(parseMarkdown(prepare(input)), opts.maxTableWidth ?? DEFAULT_MAX_TABLE_WIDTH)
 }

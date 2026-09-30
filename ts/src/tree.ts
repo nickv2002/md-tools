@@ -18,6 +18,7 @@ export interface Node {
   hard?: boolean
   level?: number
   ordered?: boolean
+  count?: number
   start?: number
   dest?: string
   email?: boolean
@@ -57,7 +58,7 @@ export function fromJSON(j: JsonNode): Node {
 /** Plain structural form for comparing two trees. */
 export function plain(n: Node): unknown {
   const out: Record<string, unknown> = { k: n.k }
-  for (const key of ['v', 'soft', 'hard', 'level', 'ordered', 'start', 'dest', 'email', 'checked', 'aligns', 'lines'] as const) {
+  for (const key of ['v', 'soft', 'hard', 'level', 'ordered', 'count', 'start', 'dest', 'email', 'checked', 'aligns', 'lines'] as const) {
     const val = n[key]
     if (val !== undefined && val !== false && val !== 0 && val !== '' && !(Array.isArray(val) && val.length === 0)) out[key] = val
   }

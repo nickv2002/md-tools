@@ -1,5 +1,10 @@
-import { type Node, node } from './tree.js'
+import { parseGoldmark } from './goldmark/index.js'
+import { toRenderTree } from './goldmark/convert.js'
+import { link, type Node } from './tree.js'
+import { stringToBytes } from './goldmark/util.js'
 
-export function parseMarkdown(_source: string): Node {
-  return node('Document')
+/** Parses Markdown into the tree the renderer reads, using a port of goldmark's parser so the tree matches the Go converter's. */
+export function parseMarkdown(source: string): Node {
+  const bytes = stringToBytes(source)
+  return link(toRenderTree(parseGoldmark(bytes), bytes))
 }

@@ -93,7 +93,7 @@ export function unescapeText(s: string, neutralize: boolean): string {
       } else if (neutralize && next === '`') {
         out += 'ˋ' // same stand-in used for backticks inside code spans
       } else {
-        if (neutralize && (next === '_' || next === '~')) out += '​'
+        if (neutralize && (next === '_' || next === '~')) out += '\u200b'
         out += next
       }
       i += 2
