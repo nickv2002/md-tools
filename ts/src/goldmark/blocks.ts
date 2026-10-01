@@ -1,6 +1,6 @@
 import { GNode, isParagraph } from './ast.js'
 import {
-  Context,
+  type Context,
   type BlockParser,
   type ParagraphTransformer,
   State,
