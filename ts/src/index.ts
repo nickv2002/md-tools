@@ -1,5 +1,5 @@
 import { toWellFormed } from './gotext.js'
-import { parseMarkdown } from './parse.js'
+import { parseMarkdown } from './parseMarkdown.js'
 import { renderDocument } from './render.js'
 
 export interface Options {

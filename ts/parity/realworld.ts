@@ -31,14 +31,14 @@ function* walk(dir: string): Generator<string> {
 async function main() {
   buildGo()
   const files: Buffer[] = []
-  for (const root of roots)
+  collect: for (const root of roots)
     for (const f of walk(root)) {
+      if (files.length >= max) break collect
       try {
         if (statSync(f).size <= 300_000) files.push(readFileSync(f))
       } catch {
         // unreadable file
       }
-      if (files.length >= max) break
     }
   console.log(`${files.length} files`)
   let bad = 0

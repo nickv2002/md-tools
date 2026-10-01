@@ -62,3 +62,21 @@ test('front matter and raw HTML are dropped', () => {
 test('lone surrogates become the replacement character', () => {
   assert.equal(markdownToSlackMrkdwn('a\ud800b'), 'a�b\n')
 })
+
+// The goldmark examples that name these cases spell the byte as a Go escape in
+// a text file, so the recorded snapshots only hold the escape text. These use
+// the real control characters; outputs are recorded from the Go converter.
+test('NUL bytes pass through as text and an HTML block swallows the rest of its line', () => {
+  assert.equal(
+    markdownToSlackMrkdwn('hello\x00world\n\n<?\x00\n'),
+    'hello\x00world\n'
+  )
+  assert.equal(markdownToSlackMrkdwn('a\x00b *c*\n'), 'a\x00b _c_\n')
+  assert.equal(markdownToSlackMrkdwn('\\\\\x00"\n'), '\\\x00"\n')
+})
+
+test('a form feed is not treated as a space', () => {
+  assert.equal(markdownToSlackMrkdwn('x \x0cy\n'), 'x \x0cy\n')
+  assert.equal(markdownToSlackMrkdwn('a\x0cb *c*\n'), 'a\x0cb _c_\n')
+  assert.equal(markdownToSlackMrkdwn('x \x0c\n'), 'x\n')
+})

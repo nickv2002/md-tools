@@ -1,5 +1,5 @@
 import { parseGoldmark } from './goldmark/index.js'
-import { toRenderTree } from './goldmark/convert.js'
+import { toRenderTree } from './goldmark/toRenderTree.js'
 import { link, type Node } from './tree.js'
 import { stringToBytes } from './goldmark/util.js'
 
