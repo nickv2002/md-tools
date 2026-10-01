@@ -1,4 +1,4 @@
-import { decodeNamedCharacterReference } from 'decode-named-character-reference'
+import { LEGACY_ENTITIES, namedEntity } from './entities.js'
 import { decodeRune } from './goldmark/util.js'
 
 // Go's unicode.IsSpace set. JavaScript's \s and trim() also match U+FEFF, which Go keeps.
@@ -62,16 +62,6 @@ export const isASCIIPunct = (c: string): boolean =>
 const ENTITY_REF =
   /&(?:#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});/y
 
-// Names Go's html package accepts without the closing semicolon.
-const LEGACY = new Set(
-  'AElig AMP Aacute Acirc Agrave Aring Atilde Auml COPY Ccedil ETH Eacute Ecirc Egrave Euml GT Iacute Icirc Igrave Iuml LT Ntilde Oacute Ocirc Ograve Oslash Otilde Ouml QUOT REG THORN Uacute Ucirc Ugrave Uuml Yacute aacute acirc acute aelig agrave amp aring atilde auml brvbar ccedil cedil cent copy curren deg divide eacute ecirc egrave eth euml frac12 frac14 frac34 gt iacute icirc iexcl igrave iquest iuml laquo lt macr micro middot nbsp not ntilde oacute ocirc ograve ordf ordm oslash otilde ouml para plusmn pound quot raquo reg sect shy sup1 sup2 sup3 szlig thorn times uacute ucirc ugrave uml uuml yacute yen yuml'.split(
-    ' '
-  )
-)
-
-// The only two names decode-named-character-reference knows that Go's table lacks.
-const NOT_IN_GO = new Set(['nGt', 'nLt'])
-
 // html.UnescapeString's table for numeric references 0x80-0x9f (Windows-1252).
 const CP1252 = [
   0x20ac, 0x81, 0x201a, 0x192, 0x201e, 0x2026, 0x2020, 0x2021, 0x2c6, 0x2030,
@@ -93,15 +83,13 @@ function unescapeEntity(m: string): string {
     return String.fromCodePoint(x)
   }
   const name = m.slice(1, -1)
-  const exact = NOT_IN_GO.has(name)
-    ? false
-    : decodeNamedCharacterReference(name)
-  if (exact !== false) return exact
+  const exact = namedEntity(name)
+  if (exact !== undefined) return exact
   for (let j = Math.min(name.length, 6); j > 1; j--) {
-    if (LEGACY.has(name.slice(0, j)))
-      return (
-        decodeNamedCharacterReference(name.slice(0, j)) + name.slice(j) + ';'
-      )
+    const prefix = name.slice(0, j)
+    if (LEGACY_ENTITIES.has(prefix)) {
+      return (namedEntity(prefix) ?? '') + name.slice(j) + ';'
+    }
   }
   return m
 }

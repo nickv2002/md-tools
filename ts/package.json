@@ -10,9 +10,6 @@
     "parity": "tsx parity/run.ts",
     "fixtures": "tsx parity/export-fixtures.ts"
   },
-  "dependencies": {
-    "decode-named-character-reference": "^1.3.0"
-  },
   "devDependencies": {
     "@types/node": "^26.6.2",
     "tsx": "^4.23.15",
