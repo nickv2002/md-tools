@@ -1,7 +1,7 @@
 // Prints goldmark's tree (and ours once it exists) for inputs given as JSON strings: npx tsx parity/dump.ts '"a\nb"'
-import { buildGo, runGo } from './golib.js'
-import { fromJSON, link, type Node } from '../src/tree.js'
-import { parseMarkdown } from '../src/parse.js'
+import { buildGo, goAstTree, runGo } from './golib.js'
+import type { Node } from '../src/tree.js'
+import { parseMarkdown } from '../src/parseMarkdown.js'
 
 export function compact(n: Node): string {
   const attrs: string[] = []
@@ -26,7 +26,7 @@ async function main() {
   const res = await runGo(inputs.map((input) => ({ input, ast: true })))
   inputs.forEach((input, i) => {
     console.log(JSON.stringify(input))
-    console.log('  go:', compact(link(fromJSON(res[i]!.ast as never))))
+    console.log('  go:', compact(goAstTree(res[i]!)))
     console.log('  ts:', compact(parseMarkdown(input)))
   })
 }

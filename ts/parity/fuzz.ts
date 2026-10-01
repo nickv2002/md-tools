@@ -4,13 +4,13 @@ import {
   type Input,
   buildGo,
   goFuzzCache,
+  goAstTree,
   goldmarkCorpus,
   runGo,
   toText,
 } from './golib.js'
-import { fromJSON, link, type Node } from '../src/tree.js'
 import { markdownToSlackMrkdwn, prepare } from '../src/index.js'
-import { parseMarkdown } from '../src/parse.js'
+import { parseMarkdown } from '../src/parseMarkdown.js'
 import { firstDiff, normalize } from './compare.js'
 import { compact } from './dump.js'
 import { generate } from './gen.js'
@@ -55,7 +55,7 @@ async function main() {
     let detail = ''
     try {
       if (mode === 'tree') {
-        const goTree = normalize(link(fromJSON(r.ast as never)) as Node)
+        const goTree = normalize(goAstTree(r))
         const tsTree = normalize(parseMarkdown(prepare(toText(input))))
         const d = firstDiff(goTree, tsTree)
         if (d) {

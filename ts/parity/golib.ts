@@ -1,16 +1,18 @@
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { decodeUtf8Lossy } from '../src/gotext.js'
+import { fromJSON, link, type Node } from '../src/tree.js'
 
 export const tsRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export const repoRoot = resolve(tsRoot, '..')
 const bin = resolve(tsRoot, '.cache/godump')
 
 export function buildGo(): void {
+  mkdirSync(dirname(bin), { recursive: true })
   execFileSync(
     'go',
     ['build', '-tags', 'slackdump', '-o', bin, './scripts/ts-parity/godump'],
@@ -19,9 +21,11 @@ export function buildGo(): void {
   if (!existsSync(bin)) throw new Error('godump build failed')
 }
 
+type GoAst = Parameters<typeof fromJSON>[0]
+
 export interface GoResult {
   out: string
-  ast?: unknown
+  ast?: GoAst
   err?: string
 }
 
@@ -35,7 +39,9 @@ export interface GoRequest {
 }
 
 const b64 = (s: Input): string =>
-  Buffer.from(s as never, 'utf8').toString('base64')
+  (typeof s === 'string' ? Buffer.from(s, 'utf8') : Buffer.from(s)).toString(
+    'base64'
+  )
 const unb64 = (s: string): string => Buffer.from(s, 'base64').toString('utf8')
 
 /** Runs the Go converter over many inputs in one process. */
@@ -45,7 +51,11 @@ export async function runGo(reqs: GoRequest[]): Promise<GoResult[]> {
   const rl = createInterface({ input: child.stdout })
   const done = new Promise<void>((res, rej) => {
     rl.on('line', (line) => {
-      const r = JSON.parse(line) as { out: string; ast?: unknown; err?: string }
+      const r = JSON.parse(line) as {
+        out: string
+        ast?: GoAst
+        err?: string
+      }
       results.push({ out: unb64(r.out ?? ''), ast: r.ast, err: r.err })
       if (results.length === reqs.length) res()
     })
@@ -73,6 +83,12 @@ export async function runGo(reqs: GoRequest[]): Promise<GoResult[]> {
   child.stdin.end()
   if (reqs.length > 0) await done
   return results
+}
+
+/** The Go dumper's AST for a result, linked into a tree the way the TS parser's trees are. */
+export function goAstTree(r: GoResult): Node {
+  if (!r.ast) throw new Error('godump returned no AST; request it with ast: true')
+  return link(fromJSON(r.ast))
 }
 
 /** Every string literal in the Go tests and the Go fuzz corpus. */
