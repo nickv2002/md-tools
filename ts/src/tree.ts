@@ -56,7 +56,7 @@ export function link(root: Node): Node {
   const stack: Node[] = [root]
   for (let n = stack.pop(); n !== undefined; n = stack.pop()) {
     for (let i = 0; i < n.c.length; i++) {
-      const child = n.c[i]!
+      const child = n.c[i]
       child.parent = n
       child.index = i
       stack.push(child)
