@@ -9,6 +9,8 @@ markdownToSlackMrkdwn('**bold** and a [link](https://example.com)') // "*bold* a
 markdownToSlackMrkdwn(table, { maxTableWidth: 0 }) // always an aligned grid (default 100 cells, wider tables become one record per row)
 ```
 
+Once merged, the source of truth is `@owner/slack-mrkdwn` in the Owner monorepo (`packages/slack-mrkdwn`), which carries this source (without `parity/`) plus vitest suites; this directory is where the Go-versus-TypeScript parity harness lives, so changes made in the package should be copied back here and checked with the commands below.
+
 ## How it stays identical to Go
 
 The Go converter renders the tree that goldmark (with its GFM extension) produces, and several goldmark behaviors differ from the CommonMark spec (raw HTML and declaration rules, list and table quirks, linkify, delimiter handling). A different Markdown library would not reproduce them, so `src/goldmark/` is a line-by-line port of the parts of goldmark that `extension.GFM` uses, working on UTF-8 bytes like the original. `src/render.ts` is a port of `internal/slack/slack.go`, `src/gotext.ts` holds the Go string semantics it relies on (`unicode.IsSpace`, `html.UnescapeString`, `ToValidUTF8`), and `src/width.ts` ports `displayWidth`.

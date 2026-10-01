@@ -8,7 +8,7 @@ export const NEWLINE = 0x0a
 export const EOF = 0xff
 
 const PUNCT = new Set(
-  [...'!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'].map((c) => c.charCodeAt(0))
+  Array.from('!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~', (c) => c.charCodeAt(0))
 )
 
 export const isPunct = (c: number): boolean => PUNCT.has(c)
@@ -229,7 +229,7 @@ export function findURLIndex(b: Uint8Array): number {
 }
 
 const EMAIL_LOCAL = new Set(
-  [...".!#$%&'*+/=?^_`{|}~-"].map((c) => c.charCodeAt(0))
+  Array.from(".!#$%&'*+/=?^_`{|}~-", (c) => c.charCodeAt(0))
 )
 const isEmailLocal = (c: number): boolean =>
   isAlphaNumeric(c) || EMAIL_LOCAL.has(c)

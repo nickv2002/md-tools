@@ -95,12 +95,14 @@ const HAIR_SPACE = '\u200a'
  * after a backslash or another marker.
  */
 const OPEN_OK = new Set(
-  [...'([{".,;:!?-/#$%^+=—…“”‘’'].map((c) => must(c.codePointAt(0)))
+  Array.from('([{".,;:!?-/#$%^+=—…“”‘’', (c) => must(c.codePointAt(0)))
 )
 const CLOSE_OK = new Set(
-  [...')[]{}".,;:!?-/#$%^+=—…“”‘’'].map((c) => must(c.codePointAt(0)))
+  Array.from(')[]{}".,;:!?-/#$%^+=—…“”‘’', (c) => must(c.codePointAt(0)))
 )
-const CODE_OPEN_EXTRA = new Set([...'\\_*~'].map((c) => must(c.codePointAt(0))))
+const CODE_OPEN_EXTRA = new Set(
+  Array.from('\\_*~', (c) => must(c.codePointAt(0)))
+)
 
 /** Folds runs of ASCII whitespace to one space; Unicode spaces (the hair space) are left alone. */
 const collapseSpace = (s: string): string =>
@@ -505,7 +507,7 @@ function renderTable(n: Node, maxTable: number): string {
   const aligns = n.aligns ?? []
   let cols = aligns.length
   for (const cells of grid) cols = Math.max(cols, cells.length)
-  const widths: number[] = new Array(cols).fill(0)
+  const widths: number[] = Array.from({ length: cols }, () => 0)
   for (const cells of grid) {
     for (let i = 0; i < cells.length; i++)
       widths[i] = Math.max(widths[i], displayWidth(cells[i]))

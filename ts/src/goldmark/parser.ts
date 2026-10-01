@@ -411,10 +411,14 @@ const byPriority = <T extends { priority: number }>(xs: T[]): T[] =>
   [...xs].sort((a, b) => a.priority - b.priority)
 
 export class Parser {
-  private blockParsers: Array<BlockParser[] | null> = new Array(256).fill(null)
+  private blockParsers: Array<BlockParser[] | null> = Array.from(
+    { length: 256 },
+    () => null
+  )
   private freeBlockParsers: BlockParser[] = []
-  private inlineParsers: Array<InlineParser[] | null> = new Array(256).fill(
-    null
+  private inlineParsers: Array<InlineParser[] | null> = Array.from(
+    { length: 256 },
+    () => null
   )
   private closeBlockers: InlineParser[] = []
   private paragraphTransformers: ParagraphTransformer[]
