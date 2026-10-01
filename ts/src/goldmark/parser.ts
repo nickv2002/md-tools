@@ -626,9 +626,20 @@ export class Parser {
     }
   }
 
-  private walkBlock(block: GNode, cb: (node: GNode) => void): void {
-    for (let c = block.firstChild; c !== null; c = c.next) this.walkBlock(c, cb)
-    cb(block)
+  /** Post-order walk (children before their parent), without recursion. */
+  private walkBlock(root: GNode, cb: (node: GNode) => void): void {
+    const stack = [{ node: root, child: root.firstChild }]
+    while (stack.length > 0) {
+      const top = must(stack[stack.length - 1])
+      if (top.child === null) {
+        stack.pop()
+        cb(top.node)
+        const parent = stack[stack.length - 1]
+        if (parent) parent.child = must(parent.child).next
+      } else {
+        stack.push({ node: top.child, child: top.child.firstChild })
+      }
+    }
   }
 
   private parseBlock(block: BlockReader, parent: GNode, pc: Context): void {
