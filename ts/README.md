@@ -38,7 +38,7 @@ Any difference prints the smallest input that shows it, with both outputs.
 
 ## Known limits
 
-- Deeply nested constructs recurse: roughly 1000 levels of nested emphasis or 10000 of nested quotes overflow the JavaScript stack and throw a `RangeError` where Go keeps going. Real messages are nowhere near that, but callers that accept untrusted input should catch it.
+- The renderer recurses once or twice per nesting level: roughly 1000 levels of nested emphasis or 2500 of nested blockquotes overflow the JavaScript stack and throw a `RangeError` where Go keeps going (parsing and tree conversion are iterative). Real messages are nowhere near that, but callers that accept untrusted input should catch it.
 - Character classes come from the runtime's Unicode tables, which matched Go 1.27 on Node 24 (Unicode 17). A runtime with older tables can differ for recently added characters; `parity/classes.ts` shows exactly which.
 - `decode-named-character-reference` supplies the HTML entity table (two names it has, `nGt` and `nLt`, are excluded because Go's table lacks them).
 - Input is a JavaScript string. Lone surrogates become U+FFFD; `decodeUtf8Lossy` decodes bytes the way the Go CLI does.

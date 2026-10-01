@@ -30,11 +30,28 @@ const KINDS = new Set<string>([
   'RawHTML',
 ])
 
-/** Reduces goldmark's AST to what the renderer reads. */
-export function toRenderTree(n: GNode, source: Uint8Array): Node {
-  const out = node(n.kind as Kind)
-  if (!KINDS.has(n.kind))
+/** Reduces goldmark's AST to what the renderer reads. Iterative so deeply nested documents do not overflow the stack. */
+export function toRenderTree(root: GNode, source: Uint8Array): Node {
+  const out = node('Document')
+  const stack: Array<[GNode, Node]> = [[root, out]]
+  for (let item = stack.pop(); item !== undefined; item = stack.pop()) {
+    const [n, target] = item
+    target.k = n.kind as Kind
+    fill(n, target, source)
+    if (n.kind === 'AutoLink') continue
+    for (let c = n.firstChild; c !== null; c = c.next) {
+      const child = node('Document')
+      target.c.push(child)
+      stack.push([c, child])
+    }
+  }
+  return out
+}
+
+function fill(n: GNode, out: Node, source: Uint8Array): void {
+  if (!KINDS.has(n.kind)) {
     throw new Error(`unexpected node kind ${n.kind} left in the tree`)
+  }
   switch (n.kind) {
     case 'Text':
       out.v = bytesToString(n.segment.value(source))
@@ -73,14 +90,10 @@ export function toRenderTree(n: GNode, source: Uint8Array): Node {
     case 'FencedCodeBlock':
     case 'CodeBlock': {
       out.lines = []
-      for (let i = 0; i < n.lines.length; i++)
+      for (let i = 0; i < n.lines.length; i++) {
         out.lines.push(bytesToString(n.lines.at(i).value(source)))
+      }
       break
     }
   }
-  if (n.kind !== 'AutoLink') {
-    for (let c = n.firstChild; c !== null; c = c.next)
-      out.c.push(toRenderTree(c, source))
-  }
-  return out
 }
