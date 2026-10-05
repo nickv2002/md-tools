@@ -71,6 +71,10 @@ For programs that run `md2mkdwn` as a subprocess. The converter is a readable ap
 - Front matter, HTML blocks, inline HTML (except `<br>`, which becomes a line break) and empty headings are omitted.
 - Malformed or unsupported Markdown degrades to readable text and never panics; `go test -fuzz FuzzConvert ./internal/slack` checks this.
 
+## TypeScript port
+
+[`ts/`](ts/README.md) holds a TypeScript implementation of the same conversion (`markdownToSlackMrkdwn`) for JavaScript services that cannot spawn the CLI. It produces byte-identical output and is checked against this Go converter by a parity harness, so it follows this contract exactly.
+
 ## macOS trust
 
 The macOS executables are signed with a Developer ID and their ZIP is submitted
@@ -84,6 +88,7 @@ connection for Gatekeeper to retrieve the ticket. No disk image is distributed.
 make check                 # gofmt, go vet and tests, identical to CI
 go test -race ./...
 go build ./cmd/mdunwrap ./cmd/md2mkdwn
+make ts-check              # typecheck and test the TypeScript port (npm install inside ts/ first)
 ```
 
 The local macOS release process is documented in [RELEASING.md](RELEASING.md).
