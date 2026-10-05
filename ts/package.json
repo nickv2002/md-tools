@@ -1,0 +1,21 @@
+{
+  "name": "md2mkdwn-ts",
+  "private": true,
+  "type": "module",
+  "description": "TypeScript port of the md2mkdwn Markdown to Slack mrkdwn converter, with a parity harness against the Go implementation",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "build:go": "cd .. && go build -tags slackdump -o ts/.cache/godump ./scripts/ts-parity/godump",
+    "parity": "tsx parity/run.ts",
+    "fixtures": "tsx parity/export-fixtures.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
