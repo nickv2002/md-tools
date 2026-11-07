@@ -1,11 +1,11 @@
 """Decrypt only the Slack session cookies (d, d-s) from the Chrome Work profile.
 
-Reuses external-helpers's extract_cookies helpers, but filters by name before
+Reuses an external extract_cookies helper module (SLACK_COOKIE_HELPERS_DIR/tools), but filters by name before
 decrypting: the stock CLI aborts if any unrelated cookie on the host (here `x`) has expired.
 Prints JSON with live values; only call it from a shell that captures stdout in a variable.
 """
-import json, sys
-sys.path.insert(0, "/Users/nick/conductor/workspaces/external-helpers/melbourne/tools")
+import json, os, sys
+sys.path.insert(0, os.path.join(os.environ["SLACK_COOKIE_HELPERS_DIR"], "tools"))
 import extract_cookies as ec
 from datetime import datetime, timezone
 

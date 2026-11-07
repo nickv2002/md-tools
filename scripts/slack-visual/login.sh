@@ -11,10 +11,13 @@
 # is locked to mode 700, and `forget` removes it. Never print or copy cookie values.
 set -euo pipefail
 SESSION=md-slack-verify
-MIG=/Users/nick/conductor/workspaces/external-helpers/melbourne
+# Required environment (nothing is stored in this repo):
+#   SLACK_WORKSPACE_URL        e.g. https://your-workspace.slack.com
+#   SLACK_COOKIE_HELPERS_DIR   uv project that provides extract_cookies (tools/extract_cookies.py);
+#                              only needed when the saved session is missing
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_DIR="$HOME/.agent-browser/sessions"
-WORKSPACE=https://your-workspace.slack.com
+WORKSPACE="${SLACK_WORKSPACE_URL:?set SLACK_WORKSPACE_URL, e.g. https://your-workspace.slack.com}"
 ab() { agent-browser --session "$SESSION" --restore "$@"; }
 
 lock_state() {
@@ -35,7 +38,7 @@ signed_in() {
 
 inject_from_chrome() {
   local json name value
-  json="$(uv run --project "$MIG" --quiet python "$HERE/slack_cookies.py")"
+  json="$(uv run --project "${SLACK_COOKIE_HELPERS_DIR:?set SLACK_COOKIE_HELPERS_DIR}" --quiet python "$HERE/slack_cookies.py")"
   ab open about:blank >/dev/null
   for name in d d-s; do
     value="$(printf '%s' "$json" | jq -j --arg n "$name" '.[] | select(.name==$n) | .value')"

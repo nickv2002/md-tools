@@ -25,7 +25,7 @@ import (
 // chat.postMessage, reads back the rich_text tree Slack parsed, deletes the
 // message, and compares it with the styling goldmark says the Markdown has.
 //
-//	scripts/slack-api/parity.sh            # fetches the token from 1Password
+//	scripts/slack-api/parity.sh            # needs SLACK_BOT_TOKEN and SLACK_TEST_USER in the environment
 //
 // Env: SLACK_BOT_TOKEN, SLACK_TEST_USER (DM target), SLACK_PARITY_N (cases,
 // default 60), SLACK_PARITY_SEED (default 1), SLACK_PARITY_INPUT (one case).
